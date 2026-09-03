@@ -34,10 +34,12 @@ __pycache__/
 
 
 # ============================================================
+# ============================================================
 # VoyariLM LARGE DATASETS
 #
-# Keep 00_DATASET_REGISTRY in GitHub,
-# but do NOT upload the multi-GB datasets.
+# Dataset files are ignored by default.
+# Only specifically approved files are force-added/tracked.
+# 00_DATASET_REGISTRY remains normally tracked.
 # ============================================================
 
 data/VoyariLM_DATA/01_RAW_SOURCES/
@@ -81,3 +83,11 @@ logs/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# ============================================================
+# Codex / temporary inspection reports
+# ============================================================
+
+VOYARILM_CODEX_PROJECT_REPORT.md
+VOYARILM_DATASET_INVENTORY_CURRENT.md
+VOYARILM_LOCAL_DATA_FILE_LIST.txt

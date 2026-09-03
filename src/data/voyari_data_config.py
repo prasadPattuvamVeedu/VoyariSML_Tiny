@@ -5,7 +5,7 @@ from pathlib import Path
 # 1. PROJECT ROOT
 # ============================================================
 
-PROJECT_ROOT = Path(r"D:\voyari_sml")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ============================================================

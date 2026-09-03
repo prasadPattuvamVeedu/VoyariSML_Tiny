@@ -1,14 +1,3 @@
-﻿"Dataset","Category","Path","Notes","Exists"
-"ALIA Tourism","PRETRAINING","D:\voyari_sml\data\VoyariLM_DATA\02_CLEAN_PRETRAINING\alia_tourism\alia_tourism_english_clean.txt","Clean English tourism prose","True"
-"India Travel Itineraries","SFT","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\india_travel_itineraries\india_travel_itineraries.jsonl","Instruction-input-output travel examples","True"
-"MultiWOZ 2.2","SFT","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\multiwoz_2_2\multiwoz_2_2_train.jsonl","Hotels trains taxis restaurants attractions dialogue","True"
-"Bitext Travel","SFT","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\bitext_travel\bitext_travel_train.jsonl","Travel questions and assistant responses","True"
-"Taskmaster 2 Travel","SFT","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\taskmaster_2\taskmaster_2_travel.jsonl","Flights hotels restaurants dialogue","True"
-"TravelPlanner Train","SFT","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\travelplanner\train.jsonl","45 complex trip-planning examples","True"
-"TravelPlanner Validation","EVAL_ONLY","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\travelplanner\validation.jsonl","Never include in training","True"
-"TravelPlanner Test","EVAL_ONLY","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\travelplanner\test.jsonl","Never include in training","True"
-"Explore India Destinations","RAG","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\explore_india_destinations\Expanded_Indian_Travel_Dataset.csv","110 structured Indian destination records","True"
-"Indian Tourism Detailed","RAG_RECOMMENDATION","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\indian_tourism_detailed\india_tourism_dataset.json","Detailed destination profiles and recommendation features","True"
-"Top Indian Places","RAG_RECOMMENDATION","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\top_indian_places\Top Indian Places to Visit.csv","325 Indian attractions","True"
-"Wanderlust Destinations","RECOMMENDATION_SYNTHETIC","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\wanderlust_ai\destinations.jsonl","Synthetic; useful for recommendation patterns","True"
-"Wanderlust POIs","RAG_SYNTHETIC_UNVERIFIED","D:\voyari_sml\data\VoyariLM_DATA\01_RAW_SOURCES\wanderlust_ai\pois.jsonl","Synthetic POIs; verify before factual use","True"
+version https://git-lfs.github.com/spec/v1
+oid sha256:1f33ab32f617ed1152cb379a0a75510965c8457cdb5327227066a64daa411f99
+size 2304
