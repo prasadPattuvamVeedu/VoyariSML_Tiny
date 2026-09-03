@@ -1,0 +1,83 @@
+﻿# ============================================================
+# Python
+# ============================================================
+
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+
+# ============================================================
+# Environment / secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+
+# ============================================================
+# IDE
+# ============================================================
+
+.vscode/
+.idea/
+
+
+# ============================================================
+# VoyariLM LARGE DATASETS
+#
+# Keep 00_DATASET_REGISTRY in GitHub,
+# but do NOT upload the multi-GB datasets.
+# ============================================================
+
+data/VoyariLM_DATA/01_RAW_SOURCES/
+data/VoyariLM_DATA/02_CLEAN_PRETRAINING/
+data/VoyariLM_DATA/03_PLACES/
+data/VoyariLM_DATA/04_INSTRUCTION/
+data/VoyariLM_DATA/05_EVALUATION/
+data/VoyariLM_DATA/06_FINAL_TRAINING/
+
+
+# ============================================================
+# Model training outputs
+# ============================================================
+
+checkpoints/
+logs/
+
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+
+# ============================================================
+# Temporary / archive files
+# ============================================================
+
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tmp
+*.temp
+
+
+# ============================================================
+# Notebook / OS junk
+# ============================================================
+
+.ipynb_checkpoints/
+Thumbs.db
+.DS_Store
+desktop.ini
