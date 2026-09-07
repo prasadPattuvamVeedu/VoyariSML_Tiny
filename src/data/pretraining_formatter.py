@@ -9,7 +9,7 @@ Tokenizer_path = TOKENIZER_PATH = (
     PROJECT_ROOT
     / "artifacts"
     / "tokenizer"
-    / "voyari_tokenizer_16k_v2.json"
+    / "voyari_tokenizer_16k_v3.json"
 )
 
 tokenizer  = Tokenizer.from_file(str(TOKENIZER_PATH))
