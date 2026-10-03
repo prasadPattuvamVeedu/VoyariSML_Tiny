@@ -3,7 +3,11 @@ from tokenizers import Tokenizer
 from src.data.voyari_data_config import TOKENIZER_PATH
 
 
-if not TOKENIZER_PATH.exists():
+# ============================================================
+# 1. LOAD THE VOYARILM TOKENIZER
+# ============================================================
+
+if not TOKENIZER_PATH.is_file():
 
     raise FileNotFoundError(
         f"Tokenizer file was not found:\n{TOKENIZER_PATH}"
@@ -13,6 +17,11 @@ if not TOKENIZER_PATH.exists():
 tokenizer = Tokenizer.from_file(
     str(TOKENIZER_PATH)
 )
+
+
+# ============================================================
+# 2. REQUIRED PRETRAINING BOUNDARY TOKENS
+# ============================================================
 
 BOS_ID = tokenizer.token_to_id("<bos>")
 EOS_ID = tokenizer.token_to_id("<eos>")
@@ -32,11 +41,20 @@ if EOS_ID is None:
     )
 
 
-# --------------------------------------------------
-# Format ONE complete pretraining document
-# --------------------------------------------------
+# ============================================================
+# 3. FORMAT ONE COMPLETE PRETRAINING DOCUMENT
+# ============================================================
 
 def format_pretraining_document(text):
+    """
+    Convert one complete pretraining document into token IDs.
+
+    Output:
+        <bos> document tokens <eos>
+
+    BOS and EOS are added once per document, not once per
+    sentence and not once per 1024-token training window.
+    """
 
     text = text.strip()
 
@@ -44,18 +62,27 @@ def format_pretraining_document(text):
 
         return []
 
-    encoding = tokenizer.encode(text)
+    # We add BOS/EOS ourselves below.
+    # Keeping add_special_tokens=False prevents accidental
+    # duplicate boundary tokens if the tokenizer later gets
+    # a post-processor that inserts special tokens.
+    encoding = tokenizer.encode(
+        text,
+        add_special_tokens=False,
+    )
 
     document_token_ids = encoding.ids
 
-    formatted_token_ids = (
+    return (
         [BOS_ID]
         + document_token_ids
         + [EOS_ID]
     )
 
-    return formatted_token_ids
 
+# ============================================================
+# 4. SMALL STANDALONE TEST
+# ============================================================
 
 if __name__ == "__main__":
 
@@ -75,15 +102,16 @@ if __name__ == "__main__":
     print("=" * 70)
 
     print()
+    print("Tokenizer:")
+    print(TOKENIZER_PATH)
+
+    print()
     print("Original document:")
     print(sample_document)
 
     print()
-    print("BOS token:")
+    print("Boundary token IDs:")
     print("<bos>", "->", BOS_ID)
-
-    print()
-    print("EOS token:")
     print("<eos>", "->", EOS_ID)
 
     print()
@@ -91,19 +119,19 @@ if __name__ == "__main__":
     print(formatted_ids)
 
     print()
-    print("First token ID:")
-    print(formatted_ids[0])
+    print("First token is BOS:")
+    print(formatted_ids[0] == BOS_ID)
 
     print()
-    print("Last token ID:")
-    print(formatted_ids[-1])
+    print("Last token is EOS:")
+    print(formatted_ids[-1] == EOS_ID)
 
     print()
     print("Total formatted tokens:")
     print(len(formatted_ids))
 
     print()
-    print("Document text decoded again:")
+    print("Decoded document without BOS/EOS:")
 
     decoded_text = tokenizer.decode(
         formatted_ids[1:-1]
