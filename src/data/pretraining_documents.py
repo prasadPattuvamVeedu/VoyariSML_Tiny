@@ -1,10 +1,6 @@
 from src.data.voyari_data_config import PRETRAINING_SOURCES
 
 
-# ==================================================
-# 1. EXPECTED DOCUMENT COUNTS
-# ==================================================
-
 EXPECTED_COUNTS = {
     "wikivoyage": 30_036,
     "simplewiki": 133_230,
@@ -13,10 +9,6 @@ EXPECTED_COUNTS = {
 }
 
 
-# ==================================================
-# 2. CHECK THAT FILE EXISTS
-# ==================================================
-
 def check_file(path):
 
     if not path.exists():
@@ -24,13 +16,22 @@ def check_file(path):
         raise FileNotFoundError(
             f"Required file was not found:\n{path}\n"
             "If this repository was cloned from GitHub, run "
-            "`git lfs pull` so the training corpora are downloaded."
+            "git lfs pull so the training corpora are downloaded."
         )
 
+    with open(path, "rb") as file:
 
-# ==================================================
-# 3. READ COMPLETE DOCUMENTS
-# ==================================================
+        prefix = file.read(80)
+
+    if prefix.startswith(
+        b"version https://git-lfs.github.com/spec/v1"
+    ):
+
+        raise RuntimeError(
+            f"Training file is still a Git LFS pointer:\n{path}\n"
+            "Run git lfs pull before starting pretraining."
+        )
+
 
 def yield_blank_separated_documents(path):
 
@@ -72,10 +73,6 @@ def yield_blank_separated_documents(path):
         )
 
 
-# ==================================================
-# 4. MASTER PRETRAINING DOCUMENT GENERATOR
-# ==================================================
-
 def yield_pretraining_documents():
 
     for source, path in PRETRAINING_SOURCES.items():
@@ -89,10 +86,6 @@ def yield_pretraining_documents():
                 document,
             )
 
-
-# ==================================================
-# 5. TEST DOCUMENT BOUNDARIES
-# ==================================================
 
 if __name__ == "__main__":
 
