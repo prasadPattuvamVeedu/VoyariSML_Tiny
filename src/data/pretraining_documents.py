@@ -1,48 +1,8 @@
-from pathlib import Path
+from src.data.voyari_data_config import PRETRAINING_SOURCES
 
 
 # ==================================================
-# 1. PROJECT PATHS
-# ==================================================
-
-PROJECT_ROOT = Path(r"D:\voyari_sml")
-
-PRETRAINING_DIR = (
-    PROJECT_ROOT
-    / "data"
-    / "VoyariLM_DATA"
-    / "06_FINAL_TRAINING"
-    / "pretraining"
-)
-
-
-# ==================================================
-# 2. FINAL APPROVED PRETRAINING FILES
-# ==================================================
-
-WIKIVOYAGE_FILE = (
-    PRETRAINING_DIR
-    / "01_wikivoyage_corpus.txt"
-)
-
-SIMPLEWIKI_FILE = (
-    PRETRAINING_DIR
-    / "02_simplewiki_corpus.txt"
-)
-
-WIKIDATA_FILE = (
-    PRETRAINING_DIR
-    / "04_wikidata_india_travel_corpus.txt"
-)
-
-UNESCO_FILE = (
-    PRETRAINING_DIR
-    / "05_unesco_india_heritage_corpus.txt"
-)
-
-
-# ==================================================
-# 3. EXPECTED DOCUMENT COUNTS
+# 1. EXPECTED DOCUMENT COUNTS
 # ==================================================
 
 EXPECTED_COUNTS = {
@@ -54,7 +14,7 @@ EXPECTED_COUNTS = {
 
 
 # ==================================================
-# 4. CHECK THAT FILE EXISTS
+# 2. CHECK THAT FILE EXISTS
 # ==================================================
 
 def check_file(path):
@@ -62,35 +22,14 @@ def check_file(path):
     if not path.exists():
 
         raise FileNotFoundError(
-            f"Required file was not found:\n{path}"
+            f"Required file was not found:\n{path}\n"
+            "If this repository was cloned from GitHub, run "
+            "`git lfs pull` so the training corpora are downloaded."
         )
 
 
 # ==================================================
-# 5. READ COMPLETE DOCUMENTS
-# ==================================================
-#
-# These four corpora use blank lines to separate
-# complete documents.
-#
-# Example:
-#
-# Munnar line 1
-# Munnar line 2
-#
-# Kochi line 1
-# Kochi line 2
-#
-# becomes:
-#
-# DOCUMENT 1:
-# Munnar line 1
-# Munnar line 2
-#
-# DOCUMENT 2:
-# Kochi line 1
-# Kochi line 2
-#
+# 3. READ COMPLETE DOCUMENTS
 # ==================================================
 
 def yield_blank_separated_documents(path):
@@ -110,125 +49,61 @@ def yield_blank_separated_documents(path):
 
             text = line.strip()
 
-            # --------------------------------------
-            # Blank line = current document finished
-            # --------------------------------------
-
             if not text:
 
                 if document_lines:
 
-                    document = "\n".join(
+                    yield "\n".join(
                         document_lines
                     )
 
-                    yield document
-
-                    # Empty the basket for the
-                    # next document.
                     document_lines = []
 
                 continue
-
-            # --------------------------------------
-            # Normal line
-            # --------------------------------------
 
             document_lines.append(
                 text
             )
 
-    # ----------------------------------------------
-    # If the file ends without a final blank line,
-    # return the last document too.
-    # ----------------------------------------------
-
     if document_lines:
 
-        document = "\n".join(
+        yield "\n".join(
             document_lines
         )
 
-        yield document
-
 
 # ==================================================
-# 6. MASTER PRETRAINING DOCUMENT GENERATOR
-# ==================================================
-#
-# Gives future training code:
-#
-# (
-#     source_name,
-#     complete_document_text
-# )
-#
-# one document at a time.
+# 4. MASTER PRETRAINING DOCUMENT GENERATOR
 # ==================================================
 
 def yield_pretraining_documents():
 
-    # Wikivoyage
-    for document in yield_blank_separated_documents(
-        WIKIVOYAGE_FILE
-    ):
+    for source, path in PRETRAINING_SOURCES.items():
 
-        yield (
-            "wikivoyage",
-            document,
-        )
+        for document in yield_blank_separated_documents(
+            path
+        ):
 
-
-    # Simple English Wikipedia
-    for document in yield_blank_separated_documents(
-        SIMPLEWIKI_FILE
-    ):
-
-        yield (
-            "simplewiki",
-            document,
-        )
-
-
-    # Wikidata India Travel
-    for document in yield_blank_separated_documents(
-        WIKIDATA_FILE
-    ):
-
-        yield (
-            "wikidata_india_travel",
-            document,
-        )
-
-
-    # UNESCO India Heritage
-    for document in yield_blank_separated_documents(
-        UNESCO_FILE
-    ):
-
-        yield (
-            "unesco_india_heritage",
-            document,
-        )
+            yield (
+                source,
+                document,
+            )
 
 
 # ==================================================
-# 7. TEST DOCUMENT BOUNDARIES
+# 5. TEST DOCUMENT BOUNDARIES
 # ==================================================
 
 if __name__ == "__main__":
 
     print()
     print("=" * 70)
-    print("VOYARILM V2 PRETRAINING DOCUMENT TEST")
+    print("VOYARILM PRETRAINING DOCUMENT TEST")
     print("=" * 70)
 
     counts = {}
-
     first_examples = {}
 
-
-    # Read every complete document.
     for source, document in yield_pretraining_documents():
 
         counts[source] = (
@@ -236,12 +111,9 @@ if __name__ == "__main__":
             + 1
         )
 
-        # Save only the first document from
-        # each source for visual checking.
         if source not in first_examples:
 
             first_examples[source] = document
-
 
     print()
     print("DOCUMENT COUNTS")
@@ -258,10 +130,11 @@ if __name__ == "__main__":
 
         total_documents += actual
 
-        if actual == expected:
-            status = "PASS"
-        else:
-            status = "CHECK"
+        status = (
+            "PASS"
+            if actual == expected
+            else "CHECK"
+        )
 
         print(
             f"{source:28} "
@@ -269,7 +142,6 @@ if __name__ == "__main__":
             f"expected={expected:>8,} "
             f"{status}"
         )
-
 
     expected_total = sum(
         EXPECTED_COUNTS.values()
@@ -286,12 +158,10 @@ if __name__ == "__main__":
         f"{expected_total:,}"
     )
 
-
     print()
     print("=" * 70)
     print("FIRST DOCUMENT FROM EACH SOURCE")
     print("=" * 70)
-
 
     for source in EXPECTED_COUNTS:
 
@@ -309,11 +179,9 @@ if __name__ == "__main__":
 
         else:
 
-            # Only show first 500 characters.
             print(
                 document[:500]
             )
-
 
     print()
     print("=" * 70)
