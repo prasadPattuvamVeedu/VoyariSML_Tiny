@@ -23,35 +23,12 @@ DATA_ROOT = (
 # 3. DATA CATEGORIES
 # ============================================================
 
-RAW_ROOT = (
-    DATA_ROOT
-    / "01_RAW_SOURCES"
-)
-
-CLEAN_PRETRAINING_ROOT = (
-    DATA_ROOT
-    / "02_CLEAN_PRETRAINING"
-)
-
-PLACES_ROOT = (
-    DATA_ROOT
-    / "03_PLACES"
-)
-
-INSTRUCTION_ROOT = (
-    DATA_ROOT
-    / "04_INSTRUCTION"
-)
-
-EVALUATION_ROOT = (
-    DATA_ROOT
-    / "05_EVALUATION"
-)
-
-FINAL_TRAINING_ROOT = (
-    DATA_ROOT
-    / "06_FINAL_TRAINING"
-)
+RAW_ROOT = DATA_ROOT / "01_RAW_SOURCES"
+CLEAN_PRETRAINING_ROOT = DATA_ROOT / "02_CLEAN_PRETRAINING"
+PLACES_ROOT = DATA_ROOT / "03_PLACES"
+INSTRUCTION_ROOT = DATA_ROOT / "04_INSTRUCTION"
+EVALUATION_ROOT = DATA_ROOT / "05_EVALUATION"
+FINAL_TRAINING_ROOT = DATA_ROOT / "06_FINAL_TRAINING"
 
 
 # ============================================================
@@ -62,7 +39,7 @@ TOKENIZER_PATH = (
     PROJECT_ROOT
     / "artifacts"
     / "tokenizer"
-    / "voyari_tokenizer_16k_v2.json"
+    / "voyari_tokenizer_16k_v3.json"
 )
 
 
@@ -77,13 +54,9 @@ CONTEXT_LENGTH = 1024
 # 6. FINAL PRETRAINING SOURCES
 # ============================================================
 
-FINAL_PRETRAINING_ROOT = (
-    FINAL_TRAINING_ROOT
-    / "pretraining"
-)
+FINAL_PRETRAINING_ROOT = FINAL_TRAINING_ROOT / "pretraining"
 
 PRETRAINING_SOURCES = {
-
     "wikivoyage":
         FINAL_PRETRAINING_ROOT
         / "01_wikivoyage_corpus.txt",
@@ -107,7 +80,6 @@ PRETRAINING_SOURCES = {
 # ============================================================
 
 PRETRAINING_CANDIDATES = {
-
     "alia_tourism":
         CLEAN_PRETRAINING_ROOT
         / "alia_tourism"
@@ -119,13 +91,9 @@ PRETRAINING_CANDIDATES = {
 # 8. EXISTING FINAL SFT SOURCES
 # ============================================================
 
-FINAL_INSTRUCTION_ROOT = (
-    FINAL_TRAINING_ROOT
-    / "instruction"
-)
+FINAL_INSTRUCTION_ROOT = FINAL_TRAINING_ROOT / "instruction"
 
 FINAL_SFT_SOURCES = {
-
     "voyari_v9":
         FINAL_INSTRUCTION_ROOT
         / "01_voyari_v9_train.jsonl",
@@ -140,13 +108,9 @@ FINAL_SFT_SOURCES = {
 # 9. NEW NORMALIZED SFT CANDIDATES
 # ============================================================
 
-NORMALIZED_SFT_ROOT = (
-    INSTRUCTION_ROOT
-    / "normalized_candidates"
-)
+NORMALIZED_SFT_ROOT = INSTRUCTION_ROOT / "normalized_candidates"
 
 SFT_CANDIDATES = {
-
     "india_travel_itineraries":
         NORMALIZED_SFT_ROOT
         / "india_travel_itineraries.jsonl",
@@ -174,7 +138,6 @@ SFT_CANDIDATES = {
 # ============================================================
 
 RAG_SOURCES = {
-
     "geonames_india":
         PLACES_ROOT
         / "geonames_india.jsonl",
@@ -201,7 +164,6 @@ RAG_SOURCES = {
 # ============================================================
 
 EVAL_SOURCES = {
-
     "travelplanner_validation":
         EVALUATION_ROOT
         / "travelplanner"
