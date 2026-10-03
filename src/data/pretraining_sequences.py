@@ -1,22 +1,4 @@
-from pathlib import Path
-import sys
-
-
-# ==================================================
-# 1. PROJECT ROOT
-# ==================================================
-
-PROJECT_ROOT = Path(r"D:\voyari_sml")
-
-sys.path.insert(
-    0,
-    str(PROJECT_ROOT),
-)
-
-
-# ==================================================
-# 2. IMPORT EXISTING PIPELINE
-# ==================================================
+from configs.model_config import CONTEXT_LENGTH
 
 from src.data.pretraining_documents import (
     yield_pretraining_documents,
@@ -28,14 +10,7 @@ from src.data.pretraining_formatter import (
 
 
 # ==================================================
-# 3. TRAINING CONTEXT LENGTH
-# ==================================================
-
-CONTEXT_LENGTH = 1024
-
-
-# ==================================================
-# 4. CREATE TRAINING SEQUENCES
+# CREATE TRAINING SEQUENCES
 # ==================================================
 
 def yield_training_sequences():
@@ -52,12 +27,8 @@ def yield_training_sequences():
             token_ids
         )
 
-        # We need 1025 tokens:
-        #
-        # 1024 for x
-        # plus
-        # 1 extra token for y
-        #
+        # Need 1025 tokens:
+        # 1024 inputs + 1 next-token target.
         while len(buffer) >= CONTEXT_LENGTH + 1:
 
             window = buffer[
@@ -65,24 +36,16 @@ def yield_training_sequences():
             ]
 
             x = window[:-1]
-
             y = window[1:]
 
             yield x, y
 
-            # Remove the 1024 tokens already used
-            # as inputs.
-            #
-            # Keep the last token because it becomes
-            # the first input token of the next window.
+            # Keep the final token so it becomes the
+            # first input token of the next window.
             buffer = buffer[
                 CONTEXT_LENGTH:
             ]
 
-
-# ==================================================
-# 5. SMALL TEST
-# ==================================================
 
 if __name__ == "__main__":
 
@@ -111,17 +74,10 @@ if __name__ == "__main__":
 
         print()
         print("First 20 x token IDs:")
-
-        print(
-            x[:20]
-        )
+        print(x[:20])
 
         print()
         print("First 20 y token IDs:")
+        print(y[:20])
 
-        print(
-            y[:20]
-        )
-
-        # Only inspect the first sequence.
         break
