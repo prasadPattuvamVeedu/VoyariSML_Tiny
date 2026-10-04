@@ -30,12 +30,19 @@ PRETRAINING_FILES = [
     PRETRAINING_DIR / "02_simplewiki_corpus.txt",
     PRETRAINING_DIR / "04_wikidata_india_travel_corpus.txt",
     PRETRAINING_DIR / "05_unesco_india_heritage_corpus.txt",
+    PRETRAINING_DIR / "06_alia_tourism_corpus.txt",
 ]
+
 
 
 INSTRUCTION_FILES = [
     INSTRUCTION_DIR / "01_voyari_v9_train.jsonl",
     INSTRUCTION_DIR / "02_sgd_travel_clarification_train.jsonl",
+    INSTRUCTION_DIR / "03_india_travel_itineraries_train.jsonl",
+    INSTRUCTION_DIR / "04_multiwoz_2_2_train.jsonl",
+    INSTRUCTION_DIR / "05_bitext_travel_train.jsonl",
+    INSTRUCTION_DIR / "06_taskmaster_2_train.jsonl",
+    INSTRUCTION_DIR / "07_travelplanner_train.jsonl",
 ]
 
 SPECIAL_TOKENS = [
@@ -61,30 +68,63 @@ def yield_pretrainig_text():
 
 
 def yield_instruction_text():
-    for path in INSTRUCTION_FILES:
-        print(f"Reading instruction: {path.name}")
-        with open(path, "r", encoding="utf-8", errors="replace") as file:
-           for line in file:
-               if not line.strip():
-                   continue
-               row = json.loads(line)
-               messages = row.get("messages", [])
 
-               for message in messages:
-                   content = message.get("content", "")
-                   if isinstance(content, str):
-                       if content.strip():
-                           yield content
-                       elif isinstance(
+    for path in INSTRUCTION_FILES:
+
+        print(
+            f"Reading instruction: {path.name}"
+        )
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+        ) as file:
+
+            for line in file:
+
+                if not line.strip():
+                    continue
+
+                row = json.loads(
+                    line
+                )
+
+                messages = row.get(
+                    "messages",
+                    [],
+                )
+
+                for message in messages:
+
+                    content = message.get(
+                        "content",
+                        "",
+                    )
+
+                    # Normal Voyari message text
+                    if isinstance(
+                        content,
+                        str,
+                    ):
+
+                        if content.strip():
+
+                            yield content
+
+
+                    # Extra safety if content is
+                    # unexpectedly a dictionary/list
+                    elif isinstance(
                         content,
                         (dict, list),
                     ):
 
-                            yield json.dumps(
-                                content,
-                                ensure_ascii=False,
-                            )
-
+                        yield json.dumps(
+                            content,
+                            ensure_ascii=False,
+                        )
 def training_iterator():
 
     yield from yield_pretrainig_text()
@@ -115,7 +155,7 @@ tokenizer.train_from_iterator(
 
 TOKENIZER_PATH = (
     OUTPUT_DIR
-    / "voyari_tokenizer_16k_v2.json"
+    / "voyari_tokenizer_16k_v3.json"
 )
 
 tokenizer.save(

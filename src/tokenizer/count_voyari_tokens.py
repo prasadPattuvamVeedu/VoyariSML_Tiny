@@ -13,7 +13,7 @@ TOKENIZER_PATH = (
     PROJECT_ROOT
     / "artifacts"
     / "tokenizer"
-    / "voyari_tokenizer_16k_v2.json"
+    / "voyari_tokenizer_16k_v3.json"
 )
 
 PRETRAINING_DIR = (
@@ -30,10 +30,16 @@ PRETRAINING_DIR = (
 # --------------------------------------------------
 
 PRETRAINING_FILES = [
+
     PRETRAINING_DIR / "01_wikivoyage_corpus.txt",
+
     PRETRAINING_DIR / "02_simplewiki_corpus.txt",
+
     PRETRAINING_DIR / "04_wikidata_india_travel_corpus.txt",
+
     PRETRAINING_DIR / "05_unesco_india_heritage_corpus.txt",
+    
+    PRETRAINING_DIR / "06_alia_tourism_corpus.txt",
 ]
 
 

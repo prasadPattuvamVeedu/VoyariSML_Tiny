@@ -1,37 +1,63 @@
 from src.data.voyari_data_config import PRETRAINING_SOURCES
 
 
+# ==================================================
+# 1. EXPECTED DOCUMENT COUNTS
+# ==================================================
+
 EXPECTED_COUNTS = {
+
     "wikivoyage": 30_036,
+
     "simplewiki": 133_230,
+
     "wikidata_india_travel": 2_197,
+
     "unesco_india_heritage": 45,
+
+    "alia_tourism": 380,
 }
 
 
+# ==================================================
+# 2. CHECK THAT FILE EXISTS
+# ==================================================
+
 def check_file(path):
 
-    if not path.exists():
+    if not path.is_file():
 
         raise FileNotFoundError(
-            f"Required file was not found:\n{path}\n"
-            "If this repository was cloned from GitHub, run "
-            "git lfs pull so the training corpora are downloaded."
+            f"Required file was not found:\n{path}"
         )
 
-    with open(path, "rb") as file:
 
-        prefix = file.read(80)
-
-    if prefix.startswith(
-        b"version https://git-lfs.github.com/spec/v1"
-    ):
-
-        raise RuntimeError(
-            f"Training file is still a Git LFS pointer:\n{path}\n"
-            "Run git lfs pull before starting pretraining."
-        )
-
+# ==================================================
+# 3. READ COMPLETE DOCUMENTS
+# ==================================================
+#
+# Corpora use blank lines to separate
+# complete documents.
+#
+# Example:
+#
+# Munnar line 1
+# Munnar line 2
+#
+# Kochi line 1
+# Kochi line 2
+#
+# becomes:
+#
+# DOCUMENT 1:
+# Munnar line 1
+# Munnar line 2
+#
+# DOCUMENT 2:
+# Kochi line 1
+# Kochi line 2
+#
+# ==================================================
 
 def yield_blank_separated_documents(path):
 
@@ -50,42 +76,79 @@ def yield_blank_separated_documents(path):
 
             text = line.strip()
 
+            # --------------------------------------
+            # Blank line = current document finished
+            # --------------------------------------
+
             if not text:
 
                 if document_lines:
 
-                    yield "\n".join(
+                    document = "\n".join(
                         document_lines
                     )
 
+                    yield document
+
+                    # Empty the basket for the
+                    # next document.
                     document_lines = []
 
                 continue
+
+            # --------------------------------------
+            # Normal line
+            # --------------------------------------
 
             document_lines.append(
                 text
             )
 
+    # ----------------------------------------------
+    # If the file ends without a final blank line,
+    # return the last document too.
+    # ----------------------------------------------
+
     if document_lines:
 
-        yield "\n".join(
+        document = "\n".join(
             document_lines
         )
 
+        yield document
+
+
+# ==================================================
+# 4. MASTER PRETRAINING DOCUMENT GENERATOR
+# ==================================================
+#
+# Gives training code:
+#
+# (
+#     source_name,
+#     complete_document_text
+# )
+#
+# one document at a time.
+# ==================================================
 
 def yield_pretraining_documents():
 
-    for source, path in PRETRAINING_SOURCES.items():
+    for source_name, path in PRETRAINING_SOURCES.items():
 
         for document in yield_blank_separated_documents(
             path
         ):
 
             yield (
-                source,
+                source_name,
                 document,
             )
 
+
+# ==================================================
+# 5. TEST DOCUMENT BOUNDARIES
+# ==================================================
 
 if __name__ == "__main__":
 
@@ -95,8 +158,11 @@ if __name__ == "__main__":
     print("=" * 70)
 
     counts = {}
+
     first_examples = {}
 
+
+    # Read every complete document.
     for source, document in yield_pretraining_documents():
 
         counts[source] = (
@@ -104,9 +170,12 @@ if __name__ == "__main__":
             + 1
         )
 
+        # Save only the first document from
+        # each source for visual checking.
         if source not in first_examples:
 
             first_examples[source] = document
+
 
     print()
     print("DOCUMENT COUNTS")
@@ -123,11 +192,10 @@ if __name__ == "__main__":
 
         total_documents += actual
 
-        status = (
-            "PASS"
-            if actual == expected
-            else "CHECK"
-        )
+        if actual == expected:
+            status = "PASS"
+        else:
+            status = "CHECK"
 
         print(
             f"{source:28} "
@@ -135,6 +203,7 @@ if __name__ == "__main__":
             f"expected={expected:>8,} "
             f"{status}"
         )
+
 
     expected_total = sum(
         EXPECTED_COUNTS.values()
@@ -151,10 +220,12 @@ if __name__ == "__main__":
         f"{expected_total:,}"
     )
 
+
     print()
     print("=" * 70)
     print("FIRST DOCUMENT FROM EACH SOURCE")
     print("=" * 70)
+
 
     for source in EXPECTED_COUNTS:
 
@@ -172,9 +243,11 @@ if __name__ == "__main__":
 
         else:
 
+            # Only show first 500 characters.
             print(
                 document[:500]
             )
+
 
     print()
     print("=" * 70)

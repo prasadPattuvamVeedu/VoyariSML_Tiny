@@ -1,43 +1,66 @@
-from pathlib import Path
+import math
 
 import torch
 import torch.nn.functional as F
 
 from configs.model_config import VOCAB_SIZE
 
-from src.model.voyari_lm import VoyariLM
+from src.data.voyari_data_config import (
+    PROJECT_ROOT,
+)
 
 from src.data.pretraining_dataset import (
     create_pretraining_dataloader,
 )
+
+from src.model.voyari_lm import VoyariLM
 
 
 # ============================================================
 # 1. TRAINING SETTINGS
 # ============================================================
 
+# Number of 1024-token sequences loaded at once.
 BATCH_SIZE = 1
 
-LEARNING_RATE = 3e-4
+# Accumulate gradients across several batches before
+# updating the model weights.
+GRAD_ACCUM_STEPS = 8
 
-# For resume test:
-#
-# checkpoint already contains step 5
-#
-# so we will continue until step 6.
-MAX_STEPS = 6
+# Maximum learning rate.
+MAX_LEARNING_RATE = 3e-4
 
+# Learning rate at the end of cosine decay.
+MIN_LEARNING_RATE = 3e-5
+
+# Gradually increase learning rate during the first steps.
+WARMUP_STEPS = 20
+
+# Stage-1 stability test.
+# This means 200 optimizer updates.
+MAX_STEPS = 200
+
+# Print training information every optimizer step.
 LOG_EVERY = 1
 
-SAVE_EVERY = 5
+# Save a checkpoint every 50 optimizer steps.
+SAVE_EVERY = 50
+
+# Maximum allowed gradient norm.
+MAX_GRAD_NORM = 1.0
+
+# Reproducibility.
+SEED = 42
 
 
 # ============================================================
 # 2. CHECKPOINT DIRECTORY
 # ============================================================
 
-CHECKPOINT_DIR = Path(
-    "artifacts/checkpoints"
+CHECKPOINT_DIR = (
+    PROJECT_ROOT
+    / "artifacts"
+    / "checkpoints"
 )
 
 CHECKPOINT_DIR.mkdir(
@@ -47,17 +70,38 @@ CHECKPOINT_DIR.mkdir(
 
 
 # ============================================================
-# 3. CHECKPOINT TO RESUME FROM
+# 3. OPTIONAL RESUME CHECKPOINT
 # ============================================================
 
-RESUME_CHECKPOINT = (
-    CHECKPOINT_DIR
-    / "voyari_step_5.pt"
+# Stage 1 should start from a fresh model.
+#
+# Later, if you want to resume, change this to something like:
+#
+# RESUME_CHECKPOINT = (
+#     CHECKPOINT_DIR
+#     / "voyari_stage1_step_100.pt"
+# )
+#
+RESUME_CHECKPOINT = None
+
+
+# ============================================================
+# 4. RANDOM SEED
+# ============================================================
+
+torch.manual_seed(
+    SEED
 )
 
+if torch.cuda.is_available():
+
+    torch.cuda.manual_seed_all(
+        SEED
+    )
+
 
 # ============================================================
-# 4. DEVICE
+# 5. DEVICE
 # ============================================================
 
 device = torch.device(
@@ -67,11 +111,68 @@ device = torch.device(
 )
 
 print()
+print("=" * 70)
+print("VOYARILM STAGE-1 PRETRAINING")
+print("=" * 70)
+
+print()
 print("Using device:", device)
 
 
 # ============================================================
-# 5. CREATE MODEL
+# 6. MIXED PRECISION MODE
+# ============================================================
+
+USE_AMP = (
+    device.type == "cuda"
+)
+
+USE_BF16 = (
+    USE_AMP
+    and torch.cuda.is_bf16_supported()
+)
+
+USE_FP16 = (
+    USE_AMP
+    and not USE_BF16
+)
+
+
+if USE_BF16:
+
+    AMP_DTYPE = torch.bfloat16
+
+elif USE_FP16:
+
+    AMP_DTYPE = torch.float16
+
+else:
+
+    AMP_DTYPE = None
+
+
+print(
+    "Mixed precision:",
+    (
+        "BF16"
+        if USE_BF16
+        else "FP16"
+        if USE_FP16
+        else "Disabled"
+    ),
+)
+
+
+# FP16 needs gradient scaling.
+# BF16 normally does not.
+scaler = torch.amp.GradScaler(
+    "cuda",
+    enabled=USE_FP16,
+)
+
+
+# ============================================================
+# 7. CREATE MODEL
 # ============================================================
 
 model = VoyariLM().to(
@@ -79,23 +180,205 @@ model = VoyariLM().to(
 )
 
 
-# ============================================================
-# 6. CREATE OPTIMIZER
-# ============================================================
+total_parameters = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+)
 
-optimizer = torch.optim.AdamW(
-    model.parameters(),
-    lr=LEARNING_RATE,
+trainable_parameters = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+    if parameter.requires_grad
+)
+
+
+print()
+print(
+    "Total parameters:",
+    f"{total_parameters:,}",
+)
+
+print(
+    "Trainable parameters:",
+    f"{trainable_parameters:,}",
 )
 
 
 # ============================================================
-# 7. LOAD CHECKPOINT
+# 8. CREATE OPTIMIZER
 # ============================================================
 
-start_step = 0
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=MAX_LEARNING_RATE,
+)
 
-if RESUME_CHECKPOINT.exists():
+
+# ============================================================
+# 9. LEARNING-RATE SCHEDULE
+# ============================================================
+
+def get_learning_rate(step):
+    """
+    Warmup followed by cosine decay.
+
+    step starts at 1.
+    """
+
+    # --------------------------------------------------------
+    # Warmup
+    # --------------------------------------------------------
+
+    if step <= WARMUP_STEPS:
+
+        warmup_ratio = (
+            step
+            / WARMUP_STEPS
+        )
+
+        return (
+            MAX_LEARNING_RATE
+            * warmup_ratio
+        )
+
+
+    # --------------------------------------------------------
+    # Cosine decay
+    # --------------------------------------------------------
+
+    decay_steps = (
+        MAX_STEPS
+        - WARMUP_STEPS
+    )
+
+    progress = (
+        step
+        - WARMUP_STEPS
+    ) / decay_steps
+
+    progress = min(
+        max(progress, 0.0),
+        1.0,
+    )
+
+    cosine_value = (
+        0.5
+        * (
+            1.0
+            + math.cos(
+                math.pi
+                * progress
+            )
+        )
+    )
+
+    learning_rate = (
+        MIN_LEARNING_RATE
+        + (
+            MAX_LEARNING_RATE
+            - MIN_LEARNING_RATE
+        )
+        * cosine_value
+    )
+
+    return learning_rate
+
+
+# ============================================================
+# 10. CHECKPOINT SAVING FUNCTION
+# ============================================================
+
+def save_checkpoint(
+    optimizer_step,
+    micro_batches_seen,
+    loss_value,
+):
+
+    checkpoint_path = (
+        CHECKPOINT_DIR
+        / (
+            f"voyari_stage1_step_"
+            f"{optimizer_step}.pt"
+        )
+    )
+
+    checkpoint = {
+
+        "optimizer_step":
+            optimizer_step,
+
+        "micro_batches_seen":
+            micro_batches_seen,
+
+        "model_state_dict":
+            model.state_dict(),
+
+        "optimizer_state_dict":
+            optimizer.state_dict(),
+
+        "scaler_state_dict":
+            scaler.state_dict(),
+
+        "loss":
+            loss_value,
+
+        "training_config": {
+
+            "batch_size":
+                BATCH_SIZE,
+
+            "gradient_accumulation_steps":
+                GRAD_ACCUM_STEPS,
+
+            "max_learning_rate":
+                MAX_LEARNING_RATE,
+
+            "min_learning_rate":
+                MIN_LEARNING_RATE,
+
+            "warmup_steps":
+                WARMUP_STEPS,
+
+            "max_steps":
+                MAX_STEPS,
+        },
+    }
+
+    torch.save(
+        checkpoint,
+        checkpoint_path,
+    )
+
+    print()
+    print(
+        "Checkpoint saved:",
+        checkpoint_path,
+    )
+    print()
+
+    return checkpoint_path
+
+
+# ============================================================
+# 11. RESUME STATE
+# ============================================================
+
+optimizer_step = 0
+
+resume_micro_batches = 0
+
+last_loss = None
+
+
+if RESUME_CHECKPOINT is not None:
+
+    if not RESUME_CHECKPOINT.is_file():
+
+        raise FileNotFoundError(
+            "Resume checkpoint was not found:\n"
+            f"{RESUME_CHECKPOINT}"
+        )
+
 
     print()
     print(
@@ -103,14 +386,12 @@ if RESUME_CHECKPOINT.exists():
         RESUME_CHECKPOINT,
     )
 
+
     checkpoint = torch.load(
         RESUME_CHECKPOINT,
         map_location=device,
     )
 
-    # --------------------------------------------------------
-    # Restore VoyariLM learned weights
-    # --------------------------------------------------------
 
     model.load_state_dict(
         checkpoint[
@@ -118,9 +399,6 @@ if RESUME_CHECKPOINT.exists():
         ]
     )
 
-    # --------------------------------------------------------
-    # Restore AdamW optimizer state
-    # --------------------------------------------------------
 
     optimizer.load_state_dict(
         checkpoint[
@@ -128,45 +406,65 @@ if RESUME_CHECKPOINT.exists():
         ]
     )
 
-    # --------------------------------------------------------
-    # Restore training step
-    # --------------------------------------------------------
 
-    start_step = checkpoint[
-        "step"
+    if (
+        USE_FP16
+        and "scaler_state_dict"
+        in checkpoint
+    ):
+
+        scaler.load_state_dict(
+            checkpoint[
+                "scaler_state_dict"
+            ]
+        )
+
+
+    optimizer_step = checkpoint[
+        "optimizer_step"
     ]
 
+    resume_micro_batches = checkpoint[
+        "micro_batches_seen"
+    ]
+
+    last_loss = checkpoint.get(
+        "loss"
+    )
+
+
     print(
-        "Resuming from step:",
-        start_step,
+        "Resuming optimizer step:",
+        optimizer_step,
+    )
+
+    print(
+        "Micro-batches already used:",
+        resume_micro_batches,
     )
 
     print(
         "Previous loss:",
-        checkpoint["loss"],
+        last_loss,
     )
 
 else:
 
     print()
     print(
-        "No resume checkpoint found."
-    )
-
-    print(
-        "Training will start from step 0."
+        "Starting Stage-1 from fresh model weights."
     )
 
 
 # ============================================================
-# 8. TRAINING MODE
+# 12. TRAINING MODE
 # ============================================================
 
 model.train()
 
 
 # ============================================================
-# 9. CREATE REAL VOYARI DATALOADER
+# 13. CREATE PRETRAINING DATALOADER
 # ============================================================
 
 dataloader = (
@@ -177,15 +475,65 @@ dataloader = (
 
 
 # ============================================================
-# 10. START TRAINING
+# 14. EFFECTIVE BATCH INFORMATION
 # ============================================================
 
-step = start_step
+effective_batch_size = (
+    BATCH_SIZE
+    * GRAD_ACCUM_STEPS
+)
 
-last_loss = None
+print()
+print(
+    "Physical batch size:",
+    BATCH_SIZE,
+)
+
+print(
+    "Gradient accumulation steps:",
+    GRAD_ACCUM_STEPS,
+)
+
+print(
+    "Effective batch size:",
+    effective_batch_size,
+)
+
+print(
+    "Approx. tokens per optimizer update:",
+    effective_batch_size * 1024,
+)
+
+print()
 
 
-for batch_number, (
+# ============================================================
+# 15. CLEAR INITIAL GRADIENTS
+# ============================================================
+
+optimizer.zero_grad(
+    set_to_none=True
+)
+
+
+# ============================================================
+# 16. TRAINING LOOP STATE
+# ============================================================
+
+accumulated_loss = 0.0
+
+accumulation_count = 0
+
+micro_batches_seen = (
+    resume_micro_batches
+)
+
+
+# ============================================================
+# 17. TRAINING LOOP
+# ============================================================
+
+for stream_batch_number, (
     input_ids,
     labels,
 ) in enumerate(
@@ -194,217 +542,356 @@ for batch_number, (
 ):
 
 
-    # ========================================================
-    # Skip batches already used before the checkpoint
-    # ========================================================
+    # --------------------------------------------------------
+    # Resume:
+    # skip micro-batches that were already trained on.
+    # --------------------------------------------------------
 
-    if batch_number <= start_step:
+    if (
+        stream_batch_number
+        <= resume_micro_batches
+    ):
 
         continue
 
 
-    # Current training step
-    step = batch_number
+    micro_batches_seen = (
+        stream_batch_number
+    )
 
 
-    # ========================================================
-    # Move batch to CPU / GPU
-    # ========================================================
+    # --------------------------------------------------------
+    # Move batch to device
+    # --------------------------------------------------------
 
     input_ids = input_ids.to(
-        device
+        device,
+        non_blocking=True,
     )
 
     labels = labels.to(
-        device
+        device,
+        non_blocking=True,
     )
 
 
+    # --------------------------------------------------------
+    # Forward pass
+    # --------------------------------------------------------
+
+    if USE_AMP:
+
+        with torch.autocast(
+            device_type="cuda",
+            dtype=AMP_DTYPE,
+        ):
+
+            logits = model(
+                input_ids
+            )
+
+            loss = F.cross_entropy(
+                logits.reshape(
+                    -1,
+                    VOCAB_SIZE,
+                ),
+                labels.reshape(
+                    -1
+                ),
+            )
+
+    else:
+
+        logits = model(
+            input_ids
+        )
+
+        loss = F.cross_entropy(
+            logits.reshape(
+                -1,
+                VOCAB_SIZE,
+            ),
+            labels.reshape(
+                -1
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # Stop immediately if loss becomes NaN or Inf
+    # --------------------------------------------------------
+
+    if not torch.isfinite(loss):
+
+        raise RuntimeError(
+            "Training stopped because loss became "
+            f"non-finite: {loss.item()}"
+        )
+
+
+    # Save original loss for reporting.
+    batch_loss = loss.item()
+
+    accumulated_loss += (
+        batch_loss
+    )
+
+    accumulation_count += 1
+
+
+    # --------------------------------------------------------
+    # Divide loss because gradients are accumulated
+    # over several micro-batches.
+    # --------------------------------------------------------
+
+    loss_for_backward = (
+        loss
+        / GRAD_ACCUM_STEPS
+    )
+
+
+    # --------------------------------------------------------
+    # Backward pass
+    # --------------------------------------------------------
+
+    if USE_FP16:
+
+        scaler.scale(
+            loss_for_backward
+        ).backward()
+
+    else:
+
+        loss_for_backward.backward()
+
+
+    # --------------------------------------------------------
+    # Keep accumulating until enough micro-batches
+    # have been processed.
+    # --------------------------------------------------------
+
+    if (
+        accumulation_count
+        < GRAD_ACCUM_STEPS
+    ):
+
+        continue
+
+
     # ========================================================
-    # Remove gradients from previous step
+    # ONE OPTIMIZER UPDATE STARTS HERE
     # ========================================================
+
+
+    # --------------------------------------------------------
+    # Set learning rate for the next optimizer step.
+    # --------------------------------------------------------
+
+    next_optimizer_step = (
+        optimizer_step
+        + 1
+    )
+
+    learning_rate = get_learning_rate(
+        next_optimizer_step
+    )
+
+    for parameter_group in optimizer.param_groups:
+
+        parameter_group["lr"] = (
+            learning_rate
+        )
+
+
+    # --------------------------------------------------------
+    # FP16 gradients must be unscaled before clipping.
+    # --------------------------------------------------------
+
+    if USE_FP16:
+
+        scaler.unscale_(
+            optimizer
+        )
+
+
+    # --------------------------------------------------------
+    # Gradient clipping
+    # --------------------------------------------------------
+
+    gradient_norm = (
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(),
+            max_norm=MAX_GRAD_NORM,
+        )
+    )
+
+
+    if not torch.isfinite(
+        gradient_norm
+    ):
+
+        raise RuntimeError(
+            "Training stopped because gradient "
+            "norm became NaN or Inf."
+        )
+
+
+    # --------------------------------------------------------
+    # Update model weights
+    # --------------------------------------------------------
+
+    if USE_FP16:
+
+        scaler.step(
+            optimizer
+        )
+
+        scaler.update()
+
+    else:
+
+        optimizer.step()
+
+
+    optimizer_step += 1
+
+
+    # --------------------------------------------------------
+    # Average loss across accumulated micro-batches.
+    # --------------------------------------------------------
+
+    average_loss = (
+        accumulated_loss
+        / accumulation_count
+    )
+
+    last_loss = (
+        average_loss
+    )
+
+
+    # --------------------------------------------------------
+    # Clear gradients for the next accumulation cycle.
+    # --------------------------------------------------------
 
     optimizer.zero_grad(
         set_to_none=True
     )
 
+    accumulated_loss = 0.0
 
-    # ========================================================
-    # Forward pass
-    # ========================================================
-
-    logits = model(
-        input_ids
-    )
-
-
-    # input_ids shape:
-    #
-    # [B, 1024]
-    #
-    #
-    # logits shape:
-    #
-    # [B, 1024, 16000]
+    accumulation_count = 0
 
 
     # ========================================================
-    # Cross Entropy Loss
+    # LOGGING
     # ========================================================
 
-    loss = F.cross_entropy(
-        logits.reshape(
-            -1,
-            VOCAB_SIZE,
-        ),
-        labels.reshape(-1),
-    )
-
-
-    last_loss = loss.item()
-
-
-    # ========================================================
-    # Backward pass
-    # ========================================================
-
-    loss.backward()
-
-
-    # ========================================================
-    # Gradient clipping
-    # ========================================================
-
-    gradient_norm = (
-        torch.nn.utils.clip_grad_norm_(
-            model.parameters(),
-            max_norm=1.0,
-        )
-    )
-
-
-    # ========================================================
-    # Update VoyariLM weights
-    # ========================================================
-
-    optimizer.step()
-
-
-    # ========================================================
-    # Print training progress
-    # ========================================================
-
-    if step % LOG_EVERY == 0:
+    if (
+        optimizer_step
+        % LOG_EVERY
+        == 0
+    ):
 
         print(
-            f"Step {step:5d} | "
-            f"Loss {loss.item():.4f} | "
+            f"Step {optimizer_step:4d} | "
+            f"Loss {average_loss:.4f} | "
+            f"LR {learning_rate:.8f} | "
             f"Grad Norm "
             f"{gradient_norm.item():.4f}"
         )
 
 
     # ========================================================
-    # Periodic checkpoint saving
+    # PERIODIC CHECKPOINT
     # ========================================================
 
-    if step % SAVE_EVERY == 0:
+    if (
+        optimizer_step
+        % SAVE_EVERY
+        == 0
+    ):
 
-        checkpoint_path = (
-            CHECKPOINT_DIR
-            / f"voyari_step_{step}.pt"
+        save_checkpoint(
+            optimizer_step=
+                optimizer_step,
+
+            micro_batches_seen=
+                micro_batches_seen,
+
+            loss_value=
+                average_loss,
         )
-
-        torch.save(
-            {
-                "step":
-                    step,
-
-                "model_state_dict":
-                    model.state_dict(),
-
-                "optimizer_state_dict":
-                    optimizer.state_dict(),
-
-                "loss":
-                    loss.item(),
-            },
-            checkpoint_path,
-        )
-
-        print()
-        print(
-            "Checkpoint saved:",
-            checkpoint_path,
-        )
-        print()
 
 
     # ========================================================
-    # Stop at MAX_STEPS
+    # STOP STAGE-1
     # ========================================================
 
-    if step >= MAX_STEPS:
+    if (
+        optimizer_step
+        >= MAX_STEPS
+    ):
 
         break
 
 
 # ============================================================
-# 11. SAVE FINAL CHECKPOINT
+# 18. SAVE FINAL CHECKPOINT
 # ============================================================
 
 if last_loss is not None:
 
     final_checkpoint_path = (
-        CHECKPOINT_DIR
-        / f"voyari_step_{step}.pt"
-    )
+        save_checkpoint(
+            optimizer_step=
+                optimizer_step,
 
-    torch.save(
-        {
-            "step":
-                step,
+            micro_batches_seen=
+                micro_batches_seen,
 
-            "model_state_dict":
-                model.state_dict(),
-
-            "optimizer_state_dict":
-                optimizer.state_dict(),
-
-            "loss":
+            loss_value=
                 last_loss,
-        },
-        final_checkpoint_path,
+        )
     )
 
-    print()
-    print(
-        "Final checkpoint saved:",
-        final_checkpoint_path,
-    )
+else:
+
+    final_checkpoint_path = None
 
 
 # ============================================================
-# 12. TRAINING FINISHED
+# 19. TRAINING FINISHED
 # ============================================================
 
 print()
-print("=" * 60)
+print("=" * 70)
+print("VOYARILM STAGE-1 PRETRAINING COMPLETED")
+print("=" * 70)
 
+print()
 print(
-    "VOYARILM PRETRAINING TEST COMPLETED"
+    "Optimizer steps completed:",
+    optimizer_step,
 )
 
-print("=" * 60)
-
 print(
-    "Steps completed:",
-    step,
+    "Micro-batches processed:",
+    micro_batches_seen,
 )
 
 if last_loss is not None:
 
     print(
         "Final loss:",
-        last_loss,
+        f"{last_loss:.4f}",
     )
+
+if final_checkpoint_path is not None:
+
+    print(
+        "Final checkpoint:",
+        final_checkpoint_path,
+    )
+
+print()

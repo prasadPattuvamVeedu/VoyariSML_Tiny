@@ -6,7 +6,7 @@ from pathlib import Path
 # 1. PROJECT PATHS
 # ============================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATA_ROOT = (
     PROJECT_ROOT
@@ -33,7 +33,7 @@ FINAL_DIR.mkdir(
 
 
 # ============================================================
-# 2. ALREADY APPROVED FINAL DATASETS
+# 2. EXISTING FINAL INSTRUCTION DATASETS
 # ============================================================
 
 EXISTING_FINAL_FILES = [
@@ -46,7 +46,7 @@ EXISTING_FINAL_FILES = [
 
 
 # ============================================================
-# 3. NEW NORMALIZED DATASETS
+# 3. FIVE NEW NORMALIZED DATASETS
 # ============================================================
 
 NEW_DATASETS = {
@@ -126,23 +126,16 @@ def read_jsonl(path):
 
                 print(
                     f"Bad JSON skipped: "
-                    f"{path.name}, "
+                    f"{path.name} "
                     f"line {line_number}"
                 )
 
 
 # ============================================================
-# 5. MAKE CONVERSATION COMPARABLE
+# 5. CONVERT CONVERSATION TO COMPARABLE TEXT
 # ============================================================
 
 def conversation_key(messages):
-    """
-    Convert a conversation into simple normalized text.
-
-    We use this text to detect duplicates.
-
-    No hashes are used.
-    """
 
     parts = []
 
@@ -162,9 +155,14 @@ def conversation_key(messages):
             )
         )
 
-        # Make duplicate comparison easier:
-        # - lowercase
-        # - remove repeated spaces/newlines
+        # Example:
+        #
+        # "Plan   A Trip To Munnar"
+        #
+        # becomes:
+        #
+        # "plan a trip to munnar"
+
         content = " ".join(
             content.lower().split()
         )
@@ -179,7 +177,7 @@ def conversation_key(messages):
 
 
 # ============================================================
-# 6. CHECK NEW RECORD STRUCTURE
+# 6. CHECK CONVERSATION STRUCTURE
 # ============================================================
 
 def valid_record(record):
@@ -189,6 +187,7 @@ def valid_record(record):
         record,
         dict,
     ):
+
         return False
 
 
@@ -202,18 +201,21 @@ def valid_record(record):
         messages,
         list,
     ):
+
         return False
 
 
-    # Need at least:
+    # Minimum:
     #
     # user
     # assistant
+
     if len(messages) < 2:
+
         return False
 
 
-    # Conversation must start with user.
+    # Must start with user.
     if messages[0].get(
         "role"
     ) != "user":
@@ -221,7 +223,7 @@ def valid_record(record):
         return False
 
 
-    # Conversation must end with assistant.
+    # Must finish with assistant.
     if messages[-1].get(
         "role"
     ) != "assistant":
@@ -238,6 +240,7 @@ def valid_record(record):
             message,
             dict,
         ):
+
             return False
 
 
@@ -245,14 +248,12 @@ def valid_record(record):
             "role"
         )
 
-
         content = message.get(
             "content"
         )
 
 
-        # New normalized datasets should contain
-        # only user and assistant roles.
+        # Only user and assistant allowed.
         if role not in {
             "user",
             "assistant",
@@ -261,7 +262,7 @@ def valid_record(record):
             return False
 
 
-        # Message text must exist.
+        # Content cannot be empty.
         if (
             not isinstance(
                 content,
@@ -273,15 +274,16 @@ def valid_record(record):
             return False
 
 
-        # We don't want:
+        # We do not want:
         #
         # user
         # user
         #
-        # or:
+        # or
         #
         # assistant
         # assistant
+
         if role == previous_role:
 
             return False
@@ -294,16 +296,22 @@ def valid_record(record):
 
 
 # ============================================================
-# 7. REMEMBER EXISTING FINAL CONVERSATIONS
+# 7. LOAD EXISTING V9 + SGD CONVERSATIONS
 # ============================================================
 
 def load_existing_conversations():
 
     seen_conversations = set()
 
+
     print()
-    print("Existing final instruction datasets")
-    print("-" * 70)
+    print(
+        "Existing final instruction datasets"
+    )
+
+    print(
+        "-" * 70
+    )
 
 
     for path in EXISTING_FINAL_FILES:
@@ -398,7 +406,8 @@ def process_dataset(
 
 
             # ------------------------------------------------
-            # Check conversation structure.
+            # CHECK 1:
+            # Is the conversation structurally valid?
             # ------------------------------------------------
 
             if not valid_record(
@@ -411,7 +420,8 @@ def process_dataset(
 
 
             # ------------------------------------------------
-            # Special TravelPlanner check.
+            # CHECK 2:
+            # TravelPlanner must contain readable Day output.
             # ------------------------------------------------
 
             if (
@@ -428,12 +438,6 @@ def process_dataset(
                 )
 
 
-                # Correct output should look like:
-                #
-                # Day 1:
-                # Location: ...
-                # Breakfast: ...
-                #
                 if not assistant_text.lstrip().startswith(
                     "Day "
                 ):
@@ -444,7 +448,8 @@ def process_dataset(
 
 
             # ------------------------------------------------
-            # Duplicate comparison.
+            # CHECK 3:
+            # Is the same conversation already present?
             # ------------------------------------------------
 
             key = conversation_key(
@@ -454,11 +459,6 @@ def process_dataset(
             )
 
 
-            # Already exists in:
-            #
-            # Voyari V9
-            # SGD
-            # or another new dataset
             if key in seen_conversations:
 
                 duplicates += 1
@@ -467,7 +467,7 @@ def process_dataset(
 
 
             # ------------------------------------------------
-            # New conversation.
+            # GOOD RECORD
             # ------------------------------------------------
 
             seen_conversations.add(
@@ -487,8 +487,15 @@ def process_dataset(
             saved += 1
 
 
+    # --------------------------------------------------------
+    # PRINT RESULT FOR THIS DATASET
+    # --------------------------------------------------------
+
     print()
-    print(dataset_name)
+
+    print(
+        dataset_name
+    )
 
     print(
         f"  total      : "
@@ -525,26 +532,31 @@ def process_dataset(
 
 
 # ============================================================
-# 9. MAIN
+# 9. MAIN PROGRAM
 # ============================================================
 
 def main():
 
     print()
-    print("=" * 70)
+
+    print(
+        "=" * 70
+    )
 
     print(
         "VOYARILM FINAL INSTRUCTION DATASET"
     )
 
-    print("=" * 70)
+    print(
+        "=" * 70
+    )
 
 
     # --------------------------------------------------------
-    # Load V9 + SGD conversations.
+    # First remember conversations already inside:
     #
-    # This lets us detect whether one of the new datasets
-    # contains the same conversation.
+    # 01 Voyari V9
+    # 02 SGD clarification
     # --------------------------------------------------------
 
     seen_conversations = (
@@ -553,8 +565,14 @@ def main():
 
 
     print()
-    print("Processing five new datasets")
-    print("-" * 70)
+
+    print(
+        "Processing five new datasets"
+    )
+
+    print(
+        "-" * 70
+    )
 
 
     grand_total = 0
@@ -564,7 +582,13 @@ def main():
 
 
     # --------------------------------------------------------
-    # Process all five normalized candidates.
+    # Process:
+    #
+    # India
+    # MultiWOZ
+    # Bitext
+    # Taskmaster
+    # TravelPlanner
     # --------------------------------------------------------
 
     for dataset_name, (
@@ -587,13 +611,9 @@ def main():
             duplicates,
             invalid,
         ) = process_dataset(
-
             dataset_name,
-
             source_path,
-
             destination_path,
-
             seen_conversations,
         )
 
@@ -612,13 +632,18 @@ def main():
     # --------------------------------------------------------
 
     print()
-    print("=" * 70)
+
+    print(
+        "=" * 70
+    )
 
     print(
         "FINALIZATION RESULT"
     )
 
-    print("=" * 70)
+    print(
+        "=" * 70
+    )
 
 
     print(
@@ -643,6 +668,7 @@ def main():
 
 
     print()
+
     print(
         "Final instruction folder:"
     )
@@ -653,8 +679,9 @@ def main():
 
 
     print()
+
     print(
-        "Expected files:"
+        "Expected final files:"
     )
 
     print(
@@ -687,14 +714,23 @@ def main():
 
 
     print()
-    print("=" * 70)
+
+    print(
+        "=" * 70
+    )
 
     print(
         "DONE"
     )
 
-    print("=" * 70)
+    print(
+        "=" * 70
+    )
 
+
+# ============================================================
+# 10. RUN
+# ============================================================
 
 if __name__ == "__main__":
 
