@@ -5,9 +5,7 @@ from src.data.pretraining_documents import (
 from src.data.pretraining_formatter import (
     format_pretraining_document,
 )
-from src.data.voyari_data_config import (
-    CONTEXT_LENGTH,
-)
+from configs.model_config import CONTEXT_LENGTH
 
 
 # ==================================================
