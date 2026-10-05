@@ -31,6 +31,28 @@ def check_file(path):
             f"Required file was not found:\n{path}"
         )
 
+    # GitHub may contain only a tiny Git-LFS pointer instead
+    # of the real training corpus. Reject it before training.
+    with open(
+        path,
+        "r",
+        encoding="utf-8",
+        errors="replace",
+    ) as file:
+
+        first_line = file.readline().strip()
+
+    if (
+        first_line
+        == "version https://git-lfs.github.com/spec/v1"
+    ):
+
+        raise RuntimeError(
+            "Training corpus is a Git-LFS pointer, "
+            "not the real dataset:\n"
+            f"{path}"
+        )
+
 
 # ==================================================
 # 3. READ COMPLETE DOCUMENTS
