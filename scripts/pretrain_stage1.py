@@ -153,6 +153,12 @@ def validate_args(args):
             "learning_rate must be greater than 0."
         )
 
+    if args.weight_decay < 0:
+
+        raise ValueError(
+            "weight_decay cannot be negative."
+        )
+
     if args.warmup_steps < 0:
 
         raise ValueError(
@@ -254,7 +260,7 @@ def resolve_resume_checkpoint(value):
 
         path = PROJECT_ROOT / path
 
-    if not path.exists():
+    if not path.is_file():
 
         raise FileNotFoundError(
             f"Resume checkpoint not found: {path}"
