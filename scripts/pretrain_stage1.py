@@ -118,10 +118,11 @@ def parse_args():
     parser.add_argument(
         "--resume",
         type=str,
-        default="auto",
+        default="none",
         help=(
+            "none = fresh run, "
             "auto = latest Stage-1 checkpoint, "
-            "none = fresh run, or provide a checkpoint path"
+            "or provide a checkpoint path"
         ),
     )
 
@@ -420,8 +421,9 @@ def main():
         else torch.float16
     )
 
-    scaler = torch.cuda.amp.GradScaler(
-        enabled=use_fp16
+    scaler = torch.amp.GradScaler(
+        "cuda",
+        enabled=use_fp16,
     )
 
     model = VoyariLM().to(
@@ -521,7 +523,7 @@ def main():
             torch.set_rng_state(
                 checkpoint[
                     "torch_rng_state"
-                ]
+                ].cpu()
             )
 
         if (
@@ -530,10 +532,15 @@ def main():
             in checkpoint
         ):
 
-            torch.cuda.set_rng_state_all(
-                checkpoint[
+            cuda_rng_states = [
+                state.cpu()
+                for state in checkpoint[
                     "cuda_rng_state_all"
                 ]
+            ]
+
+            torch.cuda.set_rng_state_all(
+                cuda_rng_states
             )
 
     if global_step >= args.max_steps:
