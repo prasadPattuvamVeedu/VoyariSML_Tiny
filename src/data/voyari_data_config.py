@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 
@@ -12,11 +13,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # 2. MAIN DATA ROOT
 # ============================================================
 
-DATA_ROOT = (
+DEFAULT_DATA_ROOT = (
     PROJECT_ROOT
     / "data"
     / "VoyariLM_DATA"
 )
+
+# Local runs use the repository data folder by default.
+# Kaggle can override this with VOYARI_DATA_ROOT.
+DATA_ROOT = Path(
+    os.environ.get(
+        "VOYARI_DATA_ROOT",
+        str(DEFAULT_DATA_ROOT),
+    )
+).expanduser()
 
 
 # ============================================================
