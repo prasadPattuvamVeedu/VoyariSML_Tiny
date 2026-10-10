@@ -160,3 +160,40 @@ subprocess.run(
 ```
 
 The audit flags potential invented dates, locations, duration, budget and traveller fields, but **these are only heuristic review flags**, not proof that an example is wrong. Inspect flagged conversations manually before editing data. Keep both model checkpoints backed up. The uploaded Custom RAG/Tool dataset needs schema conversion and quality filtering before it can join a later training run.
+
+
+## 5. Prepare conservative corrected SFT data (no training)
+
+After reviewing audit flags, use the GitHub script to create a separate, reviewable
+candidate. The source `mixed_train.jsonl` is **never overwritten**.
+
+```python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+data = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [
+        sys.executable, "-u", str(repo / "scripts/prepare_sft_v2_corrections.py"),
+        "--source", str(data / "mixed_train.jsonl"),
+        "--output", str(data / "mixed_train_corrected_candidate.jsonl"),
+        "--manifest", str(data / "mixed_train_corrections_manifest.json"),
+        "--eval", str(data / "behavior_eval_independent.jsonl"),
+    ],
+    cwd=str(repo), check=True,
+)
+```
+
+This proposes safe changes for hotel-search examples that invent `next_weekend`
+and unsupported default group size 4 for generic “friends”/“family” requests.
+Other flags remain for human review. The manifest lists each changed assistant
+message with its original and proposed JSON; do not assume all flagged samples
+are wrong, and don't launch new training before approving and reauditing the data.
+
+**Note:** The 18 behavioral questions are now an iterated *development set*,
+because their results informed correction decisions. A future independent,
+unseen evaluation set is needed for an unbiased final generalization claim.
