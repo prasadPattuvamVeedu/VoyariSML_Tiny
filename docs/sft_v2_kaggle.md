@@ -120,3 +120,43 @@ stricter tool-argument and state-field metrics before judging improvement.
 **Keep evaluation files out of the training dataset.** Save the resulting
 SFT v2 checkpoint and the latest evaluation JSONLs to a persistent private
 Kaggle dataset or local backup before the session resets.
+
+
+## 4. Comparison after the 100-step experiment
+
+Both models were tested with the same 18 held-out behavioral questions:
+
+| Metric | SFT v1 step 8000 | Corrective SFT v2 step 100 |
+| --- | ---: | ---: |
+| Valid JSON | 15/18 | 17/18 |
+| Correct action type | 7/18 | 10/18 |
+| Correct tool names | 4/6 | 4/6 |
+| Exact tool arguments | 1/6 | 1/6 |
+| Required state fields | 0/6 | 0/6 |
+| Question-shaped clarifications | 0/6 | 4/6 |
+
+The evaluator does **not** confirm whether questions are relevant or detect every invented extra field; for example, it separately reports `unexpected_state_fields`. This small diagnostic set does not justify extending training yet.
+
+Run the data audit before expanding corrective SFT:
+
+```python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+data = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [
+        sys.executable, "-u", str(repo / "scripts/audit_sft_v2_data.py"),
+        "--train", str(data / "mixed_train.jsonl"),
+        "--eval", str(data / "behavior_eval_independent.jsonl"),
+        "--report", str(data / "mixed_train_audit.json"),
+    ],
+    cwd=str(repo), check=True,
+)
+```
+
+The audit flags potential invented dates, locations, duration, budget and traveller fields, but **these are only heuristic review flags**, not proof that an example is wrong. Inspect flagged conversations manually before editing data. Keep both model checkpoints backed up. The uploaded Custom RAG/Tool dataset needs schema conversion and quality filtering before it can join a later training run.
