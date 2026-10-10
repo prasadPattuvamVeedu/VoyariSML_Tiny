@@ -110,6 +110,14 @@ def validate(args):
         raise FileNotFoundError(args.tokenizer)
 
 
+def validate_parent_checkpoint(checkpoint):
+    """Only accept the frozen SFT v2 step-100 parent from SFT v1 step 8000."""
+    if (checkpoint.get("stage") != "sft_v2"
+            or int(checkpoint.get("step", -1)) != 100
+            or checkpoint.get("run_config", {}).get("parent_sft_step") != 8000):
+        raise RuntimeError("Day 4 parent must be SFT v2 step 100 from SFT v1 step 8000")
+
+
 def ordered_for_epoch(size, epoch, seed):
     # Stateless permutation: resume can reconstruct it from consumed micro-batches.
     order = list(range(size))
@@ -294,13 +302,6 @@ def main():
         raise RuntimeError(
             "Training/holdout prompt overlap: " + repr(sorted(clashes)[:3])
         )
-
-    # Frozen SFT v2 model is the ONLY approved initial checkpoint.
-    def validate_parent_checkpoint(checkpoint):
-        if (checkpoint.get("stage") != "sft_v2"
-                or int(checkpoint.get("step", -1)) != 100
-                or checkpoint.get("run_config", {}).get("parent_sft_step") != 8000):
-            raise RuntimeError("Day 4 parent must be SFT v2 step 100 from SFT v1 step 8000")
 
     if args.dry_run:
         checkpoint = torch.load(args.base_checkpoint, map_location="cpu", weights_only=True)
