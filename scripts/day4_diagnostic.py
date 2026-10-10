@@ -209,7 +209,10 @@ def run_evaluation(args, cases, digest):
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     stage, step = checkpoint.get("stage"), int(checkpoint.get("step", -1))
     if not ((stage == "sft" and step == 8000)
-            or (stage == "sft_v2" and step == 100)):
+            or (stage == "sft_v2" and step == 100)
+            or (stage == "sft_day4" and 1 <= step <= 100
+                and checkpoint.get("parent_stage") == "sft_v2"
+                and checkpoint.get("parent_sft_step") == 100)):
         raise ValueError(f"Unsupported checkpoint: stage={stage} step={step}")
     tokenizer = Tokenizer.from_file(str(args.tokenizer))
     system_text = system_from_dataset(args.system_dataset)
