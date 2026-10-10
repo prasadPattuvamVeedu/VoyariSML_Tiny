@@ -103,15 +103,21 @@ QUESTION_VARIATIONS = (
     "Can you find a stay in {city}? My check-in and check-out are undecided.",
     "Look for a hotel in {city}. I cannot give travel dates yet.",
     "Please search rooms in {city}, although my travel dates are unknown.",
+    "Show accommodation choices for {city}; I don't know the dates yet.",
+    "I need a hotel in {city} but have not selected check-in or check-out dates.",
 )
 GROUP_CONFLICT = (
-    "I say this is a solo trip, but our group plans to travel together. Please save the group size.",
-    "I am going alone, but I also said all of us are travelling. Record the traveller count.",
-    "I mentioned travelling solo and also with my friends. Can you set the group size?",
+    "I say this is a solo trip from {city}, but our group plans to travel together. Please save the group size.",
+    "I am going alone from {city}, but I also said all of us are travelling. Record the traveller count.",
+    "I mentioned travelling solo from {city} and also with my friends. Can you set the group size?",
+    "I will start from {city} alone, but I also mentioned our group. Please set the traveller count.",
+    "Travelling from {city}: I said solo and also that all of us are going. How many people should be recorded?",
 )
 TRANSPORT_MISSING_ORIGIN = (
     "Find transport to {city} tomorrow, but my departure city is unknown.",
     "Look up buses to {city} next weekend. I haven't said where I'm starting.",
+    "Check travel routes to {city} next Friday; my starting point is not set.",
+    "Search transport options to {city} tomorrow. I did not provide my departure city.",
 )
 TOOL_WEATHER_DATE = ("tomorrow", "today", "next Friday", "next weekend")
 TOOL_WEATHER_TEXT = (
@@ -215,7 +221,7 @@ def clarification_case(rng):
                     f"What check-in and check-out dates are you considering for {city}?"
                 )}, "clarify")
     if choice == 1:
-        return (choose(rng, GROUP_CONFLICT),
+        return (choose(rng, GROUP_CONFLICT).format(city=city),
                 {"type": "message", "message": (
                     "You mentioned conflicting traveller details. "
                     "Will you be travelling alone or with a group?"
@@ -266,8 +272,14 @@ def main():
     for path in paths:
         if not path.is_file():
             raise FileNotFoundError(path)
-    if len({p.resolve() for p in [args.output, args.manifest, *paths]}) != 2 + len(paths):
-        raise ValueError("Input/output paths must be distinct")
+    # The system dataset can legitimately be listed again for train-overlap checks.
+    # Only output/manifest must be distinct from each other and every input.
+    input_paths = {p.resolve() for p in paths}
+    output_path, manifest_path = args.output.resolve(), args.manifest.resolve()
+    if (output_path == manifest_path
+            or output_path in input_paths
+            or manifest_path in input_paths):
+        raise ValueError("Output and manifest must not overwrite any input files")
     if any(x < 0 for x in (args.state, args.clarify, args.tool)):
         raise ValueError("Example counts must be nonnegative")
     requested = args.state + args.clarify + args.tool
