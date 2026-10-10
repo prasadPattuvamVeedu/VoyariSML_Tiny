@@ -330,3 +330,52 @@ subprocess.run([
 Verification uses the local backup manifest to check all seven expected
 uploaded artifacts. A completed file listing confirms remote presence; for
 privacy also confirm the Kaggle dataset visibility is set to **Private**.
+
+
+## Step 7 — Analyze Day 4 regression (no more training)
+
+Day 4 step-25 backup upload and the seven file listings were verified in
+Kaggle private Dataset:
+\`prasadpattuvamveedu/voyari-tiny-day4-step25-backup-20261010\`.
+Confirm Kaggle visibility is set to Private.
+
+Current development benchmark comparison:
+- SFT v2 step100: valid JSON 29/30, correct action 19/30, exact total 4/30;
+  state exact 0/12, tool exact 2/8, clarification topic 2/10.
+- Day 4 step25: valid JSON 30/30, correct action 19/30, exact total 4/30;
+  state exact 0/12, tool exact 4/8, clarification topic 0/10.
+- Clarification *action selection* regressed from 8/10 to 2/10. This is more
+  substantial than the keyword-based topic score. Investigate before training.
+
+\`scripts/compare_day4_checkpoints.py\` prints per-question before/after
+responses and action transitions, focusing on clarification failures first.
+\`scripts/test_compare_day4_checkpoints.py\` tests comparison invariants.
+
+\`\`\`python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [sys.executable, str(repo / "scripts/test_compare_day4_checkpoints.py")],
+    cwd=repo, check=True,
+)
+folder = Path("/kaggle/working/day4_evaluation")
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/compare_day4_checkpoints.py"),
+    "--baseline", str(folder / "day4_sft_v2_step_000100_results.jsonl"),
+    "--candidate", str(folder / "day4_sft_day4_step_000025_results.jsonl"),
+    "--baseline-summary", str(folder / "day4_sft_v2_step_000100_summary.json"),
+    "--candidate-summary", str(folder / "day4_sft_day4_step_000025_summary.json"),
+    "--category", "clarify", "--limit", "10",
+    "--report", str(folder / "day4_regression_comparison.json"),
+], cwd=repo, check=True)
+\`\`\`
+
+Inspect the complete text of all ten original clarification questions and
+both model responses. The keyword topic metric can misjudge a response, but
+wrong action types are separately counted. Use this analysis to guide data
+changes, rather than extending the existing step-25 training run blindly.
