@@ -146,7 +146,14 @@ def main():
     heldout = set()
     if args.eval:
         for _, record in iter_records(args.eval):
-            heldout.add(normalize(first_user_text(record["messages"])))
+            if "question" in record:
+                # Independent behavioral evaluation uses {question, expected}.
+                heldout.add(normalize(record["question"]))
+            elif isinstance(record.get("messages"), list):
+                # Corrective evaluations use the conversation JSONL format.
+                heldout.add(normalize(first_user_text(record["messages"])))
+            else:
+                raise ValueError("Unknown evaluation record shape")
 
     output_records = []
     corrections = []
