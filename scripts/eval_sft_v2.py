@@ -1,4 +1,4 @@
-"""Evaluate corrective VoyariLM Tiny SFT v2 on fixed held-out travel prompts.
+"""Evaluate VoyariLM Tiny SFT v1 and corrective SFT v2 on identical prompts.
 
 Reads existing checkpoints and JSONL evaluation cases; never trains or changes weights.
 Outputs action, tool, argument, and state-field checks to a separate JSONL report.
@@ -21,7 +21,7 @@ from src.model.voyari_lm import VoyariLM
 
 
 def arguments():
-    parser = argparse.ArgumentParser(description="Evaluate VoyariLM Tiny SFT v2")
+    parser = argparse.ArgumentParser(description="Evaluate VoyariLM Tiny SFT checkpoints")
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--eval-file", type=Path, required=True)
     parser.add_argument(
@@ -31,6 +31,8 @@ def arguments():
     parser.add_argument("--system-dataset", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-new-tokens", type=int, default=200)
+    parser.add_argument("--run-label", choices=("sft_v1_strict", "sft_v2_strict"),
+                        default=None, help="Separate output filenames for fair comparisons")
     return parser.parse_args()
 
 
@@ -154,12 +156,22 @@ def main():
         raise ValueError("--max-new-tokens must be between 1 and 512")
 
     ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
-    if ckpt.get("stage") != "sft_v2":
-        raise ValueError("Expected an SFT v2 checkpoint")
-    if ckpt.get("run_config", {}).get("parent_sft_step") != 8000:
-        raise ValueError("Expected parent SFT v1 step 8000")
-    print("Evaluating SFT v2 optimizer step:", ckpt.get("step"), flush=True)
+    stage = ckpt.get("stage")
+    if stage == "sft":
+        if int(ckpt.get("step", -1)) != 8000:
+            raise ValueError("Expected SFT v1 step 8000")
+        label = "sft_v1_strict"
+    elif stage == "sft_v2":
+        if ckpt.get("run_config", {}).get("parent_sft_step") != 8000:
+            raise ValueError("Expected SFT v2 based on SFT v1 step 8000")
+        label = "sft_v2_strict"
+    else:
+        raise ValueError(f"Unsupported checkpoint stage: {stage!r}")
+    if args.run_label and args.run_label != label:
+        raise ValueError(f"--run-label {args.run_label} does not match {stage}")
+    print("Evaluating", label, "optimizer step:", ckpt.get("step"), flush=True)
 
+    ckpt_step = ckpt.get("step")
     tokenizer = Tokenizer.from_file(str(args.tokenizer))
     system_text = system_from_dataset(args.system_dataset)
     cases = read_jsonl(args.eval_file)
@@ -173,8 +185,8 @@ def main():
     print("Device:", device, "| Questions:", len(cases), flush=True)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = args.output_dir / "sft_v2_independent_results.jsonl"
-    summary_file = args.output_dir / "sft_v2_independent_summary.json"
+    output_file = args.output_dir / f"{label}_independent_results.jsonl"
+    summary_file = args.output_dir / f"{label}_independent_summary.json"
 
     results = []
     for i, case in enumerate(cases, 1):
@@ -218,6 +230,8 @@ def main():
 
     summary = {
         "checkpoint": str(args.checkpoint),
+        "checkpoint_stage": stage,
+        "checkpoint_step": int(ckpt_step),
         "eval_file": str(args.eval_file),
         "total": len(results),
         "valid_json": count("valid_json"),
@@ -240,7 +254,7 @@ def main():
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    print("\nSFT V2 INDEPENDENT EVALUATION")
+    print(f"\n{label.upper()} INDEPENDENT EVALUATION")
     for key, value in summary.items():
         if isinstance(value, tuple):
             print(f"{key}: {value[0]}/{value[1]}")
