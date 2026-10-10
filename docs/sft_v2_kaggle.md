@@ -78,3 +78,45 @@ Checkpoints are saved under `/kaggle/working/VoyariSML_Tiny_day3/artifacts/check
 - Random validation samples from `mixed_train.jsonl` do not establish out-of-distribution behavior.
 - Evaluate v2 against the **18 separate behavioral questions** already prepared in Kaggle; verify JSON validity, tool name, tool arguments, destination, budget, dates, duration, and explicit constraints. Correct action type alone is insufficient.
 - Do not claim the model improved simply because training loss declined.
+
+## 3. Evaluate the completed 100-step checkpoint
+
+Run this after the runner successfully saved `voyari_sft_step_000100.pt` and your
+`behavior_eval_independent.jsonl` is present in Kaggle.
+
+```python
+import subprocess
+import sys
+from pathlib import Path
+
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+
+v2_data = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+command = [
+    sys.executable, "-u", str(repo / "scripts/eval_sft_v2.py"),
+    "--checkpoint", str(
+        repo / "artifacts/checkpoints/sft_v2/corrective_v1/voyari_sft_step_000100.pt"
+    ),
+    "--eval-file", str(v2_data / "behavior_eval_independent.jsonl"),
+    "--system-dataset",
+    "/kaggle/input/datasets/prasadpattuvamveedu/"
+    "voyari-tiny-instruction-v1/01_voyari_v9_train.jsonl",
+    "--output-dir", str(v2_data),
+    "--max-new-tokens", "200",
+]
+subprocess.run(command, cwd=str(repo), check=True)
+```
+
+Read `sft_v2_independent_summary.json` and the per-question results.
+For reference, the SFT v1 independent baseline was **15/18 valid JSON,
+7/18 correct action types, and 4/6 correct tool names**. Its correct
+tool-name count included outputs with wrong destinations, so check the
+stricter tool-argument and state-field metrics before judging improvement.
+
+**Keep evaluation files out of the training dataset.** Save the resulting
+SFT v2 checkpoint and the latest evaluation JSONLs to a persistent private
+Kaggle dataset or local backup before the session resets.
