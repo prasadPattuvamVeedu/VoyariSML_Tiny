@@ -205,3 +205,59 @@ Inspect the 16 cases printed, including **USER** and **EXPECTED** JSON.
 A passing heuristic check alone is not enough for production training labels.
 Record any semantic mismatches and correct the generator, not the Kaggle JSONL
 by hand, so generated examples remain reproducible.
+
+
+## Step 5 — Day 4 controlled SFT training preflight (NO GPU updates)
+
+Use \`scripts/train_sft_day4.py\`, **not** \`train_sft_v2.py\`, so the
+model starts from the frozen SFT v2 step-100 checkpoint instead of SFT v1
+step 8000.
+
+- Parent model: \`artifacts/checkpoints/sft_v2/corrective_v1/voyari_sft_step_000100.pt\`
+- Fresh optimizer, new stage: \`sft_day4\`
+- Run name: \`grounded_mix_v1\`
+- Replay mix: 1,640 new synthetic examples + 960 reviewed Day 3 conversations
+  (dataset index/shuffle combines them; no evaluation cases in training)
+- Set \`--max-steps 100 --session-steps 25\`: only 25 updates in the first
+  session, with a saved checkpoint and validation loss at step 25.
+- New model output path:
+  \`artifacts/checkpoints/sft_day4/grounded_mix_v1/voyari_day4_step_000025.pt\`
+- Initial learning rate experiment: peak 3e-6, min 8e-7, 8 warmup steps,
+  8 microbatches/optimizer update, fresh AdamW, evaluation every 25 steps.
+- Mandatory holdout files: old 18-question development eval and Day 4
+  30-question diagnostic. The trainer checks exact prompt overlap.
+- Compare checkpoint with the frozen SFT v2 model before extending 25 steps.
+  The Day 4 evaluator now accepts \`sft_day4\` staged checkpoints.
+
+Run preflight first:
+
+\`\`\`python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [sys.executable, str(repo / "scripts/test_train_sft_day4.py")],
+    cwd=repo, check=True,
+)
+checkpoint = repo / "artifacts/checkpoints/sft_v2/corrective_v1/voyari_sft_step_000100.pt"
+day3 = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/train_sft_day4.py"),
+    "--dry-run",
+    "--base-checkpoint", str(checkpoint),
+    "--training-file", "/kaggle/working/day4_data/day4_grounded_train.jsonl",
+    "--training-file", str(day3 / "mixed_train_reviewed_candidate.jsonl"),
+    "--holdout-file", str(day3 / "behavior_eval_independent.jsonl"),
+    "--holdout-file", str(repo / "eval/day4_diagnostic_v1.jsonl"),
+    "--max-steps", "100", "--session-steps", "25",
+], cwd=repo, check=True)
+\`\`\`
+
+A passed preflight confirms data and checkpoint compatibility but performs
+**no optimizer updates**. After the first 25 updates, run the same 30-question
+benchmark for the frozen parent and the candidate. Save important checkpoints
+to a persistent private Kaggle Dataset before notebook shutdown.
