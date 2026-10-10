@@ -23,6 +23,7 @@ NUMBER_WORDS = {
     8: ("eight", "8-day"),
     9: ("nine", "9-day"),
     10: ("ten", "10-day"),
+    11: ("eleven", "11-day"),
 }
 DATE_MARKERS = (
     "tomorrow", "today", "tonight", "weekend", "next week", "this week",
