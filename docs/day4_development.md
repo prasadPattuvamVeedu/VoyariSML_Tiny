@@ -67,3 +67,78 @@ print("Model checkpoint candidates:", [str(p) for p in checkpoint_candidates if 
 The next step is to run Day 4 inference against the saved SFT v2 checkpoint,
 inspect per-case failures, then prepare *new* validated state/tool training
 examples without leaking the 30 development questions into training.
+
+
+## Step 3 — Grounded new training data (no optimizer steps)
+
+The first 12 Day 4 state cases showed 5 wrong actions, 5 incorrect origins
+among the 7 state responses, 4 incorrect budgets, 3 incorrect durations,
+and invented state fields. The new generator focuses on these observed failure
+classes without copying benchmark prompts.
+
+- `scripts/generate_day4_grounded_sft.py` builds 1,640 deterministic synthetic
+  conversations (default: 1,200 grounded state updates, 240 clarification
+  cases, 200 tool calls) using the exact existing V9 system instruction.
+- `scripts/validate_day4_grounded_sft.py` checks role/JSON shape, implied
+  group size, absence of invented fields, current label heuristics, and
+  exact prompt exclusion against the reviewed Day 3 data and both development
+  evaluations.
+- Neither script trains or overwrites Day 3 checkpoints/data. New JSONL and
+  manifest are stored in Kaggle output, not committed to GitHub.
+- **Do not use** `eval/day4_diagnostic_v1.jsonl` as training material. Avoid
+  repeated optimization directly on its exact prompts.
+- All generated labels need spot review: deterministic template generation is
+  useful for supervision but does not guarantee generalization.
+
+```python
+import subprocess, sys
+from pathlib import Path
+
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+v1_dir = Path(
+    "/kaggle/input/datasets/prasadpattuvamveedu/voyari-tiny-instruction-v1"
+)
+v1_train = v1_dir / "01_voyari_v9_train.jsonl"
+sgd_train = v1_dir / "02_sgd_travel_clarification_train.jsonl"
+data = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+reviewed = data / "mixed_train_reviewed_candidate.jsonl"
+eval_old = data / "behavior_eval_independent.jsonl"
+eval_new = repo / "eval/day4_diagnostic_v1.jsonl"
+out = Path("/kaggle/working/day4_data")
+out.mkdir(parents=True, exist_ok=True)
+train = out / "day4_grounded_train.jsonl"
+
+inputs = [v1_train, sgd_train, reviewed, eval_old, eval_new]
+for f in inputs:
+    assert f.is_file(), f"Missing required dataset: {f}"
+
+base = [
+    "--system-dataset", str(v1_train),
+    "--holdout", str(eval_old), "--holdout", str(eval_new),
+    "--existing-train", str(reviewed),
+    "--existing-train", str(v1_train),
+    "--existing-train", str(sgd_train),
+]
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/generate_day4_grounded_sft.py"),
+    "--output", str(train),
+    "--manifest", str(out / "day4_grounded_manifest.json"),
+    *base,
+], cwd=repo, check=True)
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/validate_day4_grounded_sft.py"),
+    "--training-file", str(train),
+    "--holdout", str(eval_old), "--holdout", str(eval_new),
+    "--existing-train", str(reviewed),
+    "--existing-train", str(v1_train),
+    "--existing-train", str(sgd_train),
+    "--expected-count", "1640",
+], cwd=repo, check=True)
+```
+
+Review printed counts and spot-check generated examples before deciding whether
+to mix the new data with Day 3 replay data for a new, separate SFT experiment.
