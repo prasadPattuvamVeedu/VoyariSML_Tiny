@@ -170,3 +170,38 @@ subprocess.run(
 ```
 
 This is a code/path validation fix; it does not resume training or change model weights.
+
+
+## Step 4 — Independent label audit and human spot review
+
+After the 1,640 generated examples pass \`validate_day4_grounded_sft.py\`,
+run the separate \`review_day4_grounded_labels.py\` checker. It compares
+state numbers, interests, cities, budgets and budget bases against source text
+and verifies tool argument and clarification targets. The script reports
+warnings but **does not edit input training data or train the model**.
+
+\`\`\`python
+import subprocess, sys
+from pathlib import Path
+
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [sys.executable, "-u", str(repo / "scripts/test_review_day4_grounded_labels.py")],
+    cwd=repo, check=True,
+)
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/review_day4_grounded_labels.py"),
+    "--train", "/kaggle/working/day4_data/day4_grounded_train.jsonl",
+    "--report", "/kaggle/working/day4_data/day4_independent_review.json",
+    "--sample-state", "8", "--sample-tool", "4", "--sample-clarify", "4",
+], cwd=repo, check=True)
+\`\`\`
+
+Inspect the 16 cases printed, including **USER** and **EXPECTED** JSON.
+A passing heuristic check alone is not enough for production training labels.
+Record any semantic mismatches and correct the generator, not the Kaggle JSONL
+by hand, so generated examples remain reproducible.
