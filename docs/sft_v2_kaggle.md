@@ -197,3 +197,51 @@ are wrong, and don't launch new training before approving and reauditing the dat
 **Note:** The 18 behavioral questions are now an iterated *development set*,
 because their results informed correction decisions. A future independent,
 unseen evaluation set is needed for an unbiased final generalization claim.
+
+
+## 6. Apply five reviewed solo/plural clarifications
+
+The candidate audit reduced 156 original warnings to 5. All five remaining
+items contain contradictory phrasing (`solo` alongside `we`, `our`, or
+`all of us`) at **JSONL lines 172, 417, 421, 792 and 906**.
+Review recommendation: ask for confirmation of party size instead of treating
+these as unambiguous one-person trips.
+
+```python
+import subprocess, sys
+from pathlib import Path
+
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+data = Path("/kaggle/working/VoyariSML_Tiny/artifacts/data/sft_v2")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [
+        sys.executable, "-u", str(repo / "scripts/finalize_sft_v2_candidate.py"),
+        "--source", str(data / "mixed_train_corrected_candidate.jsonl"),
+        "--output", str(data / "mixed_train_reviewed_candidate.jsonl"),
+        "--manifest", str(data / "reviewed_candidate_manifest.json"),
+        "--eval", str(data / "behavior_eval_independent.jsonl"),
+    ],
+    cwd=str(repo), check=True,
+)
+subprocess.run(
+    [
+        sys.executable, "-u", str(repo / "scripts/audit_sft_v2_data.py"),
+        "--train", str(data / "mixed_train_reviewed_candidate.jsonl"),
+        "--eval", str(data / "behavior_eval_independent.jsonl"),
+        "--report", str(data / "mixed_train_reviewed_audit.json"),
+    ],
+    cwd=str(repo), check=True,
+)
+```
+
+Expected candidate contains 960 conversations; state_update count 292,
+message count 816, tool_call count 339, if exactly five reviewed actions
+convert to messages. No new training is launched by these commands.
+
+The candidate is **not automatically approved** solely because heuristic
+warnings are zero; additional semantic review, quality/diversity improvement,
+and a genuinely unseen test set are needed before another training experiment.
