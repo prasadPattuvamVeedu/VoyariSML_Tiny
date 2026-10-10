@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 
 from audit_sft_v2_data import (
-    inspect_action, duration_mentioned, budget_supported,
+    inspect_action, duration_mentioned, budget_supported, first_eval_question,
 )
 
 
@@ -16,6 +16,21 @@ def state(group, count):
 
 
 class AuditHeuristicTests(unittest.TestCase):
+    def test_behavior_eval_question_extraction(self):
+        self.assertEqual(
+            first_eval_question({"question": "  Visit Kodaikanal? ", "expected": {}}),
+            "visit kodaikanal?",
+        )
+
+    def test_conversation_eval_question_extraction(self):
+        self.assertEqual(
+            first_eval_question({"messages": [
+                {"role": "system", "content": "Travel"},
+                {"role": "user", "content": "  Visit Ooty? "},
+            ]}),
+            "visit ooty?",
+        )
+
     def test_solo_means_one(self):
         flags = inspect_action(state("solo", 1), "jaipur start, 2 days, solo")
         self.assertNotIn("traveller_count_not_numeric_in_user_context", flags)
