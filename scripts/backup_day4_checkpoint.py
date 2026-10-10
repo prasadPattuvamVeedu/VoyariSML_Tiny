@@ -14,6 +14,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,12 +60,16 @@ def verify_checkpoint(path: Path) -> dict:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Private Kaggle backup of Day 4 step 25")
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--train", type=Path, required=True)
-    parser.add_argument("--train-manifest", type=Path, required=True)
-    parser.add_argument("--eval-results", type=Path, required=True)
-    parser.add_argument("--eval-summary", type=Path, required=True)
-    parser.add_argument("--log", type=Path, required=True)
+    parser.add_argument("--verify-only", action="store_true",
+                        help="Verify existing private dataset without re-uploading")
+    parser.add_argument("--verify-attempts", type=int, default=8)
+    parser.add_argument("--verify-interval", type=float, default=8)
+    parser.add_argument("--checkpoint", type=Path)
+    parser.add_argument("--train", type=Path)
+    parser.add_argument("--train-manifest", type=Path)
+    parser.add_argument("--eval-results", type=Path)
+    parser.add_argument("--eval-summary", type=Path)
+    parser.add_argument("--log", type=Path)
     parser.add_argument("--dataset-id", default=DEFAULT_DATASET_ID)
     parser.add_argument(
         "--backup-dir", type=Path,
@@ -73,12 +78,70 @@ def parse_args():
     return parser.parse_args()
 
 
+def verify_remote(dataset_id, expected, attempts=8, interval=8):
+    """Kaggle dataset creation is asynchronous; listing may temporarily fail."""
+    if attempts < 1 or interval < 0:
+        raise ValueError("Verification attempts must be positive and interval nonnegative")
+    expected = set(expected)
+    for attempt in range(1, attempts + 1):
+        listed = subprocess.run(
+            ["kaggle", "datasets", "files", dataset_id, "--page-size", "200"],
+            capture_output=True, text=True,
+        )
+        missing = sorted(name for name in expected if name not in listed.stdout)
+        if listed.returncode == 0 and not missing:
+            print("PRIVATE DATASET BACKUP FILE LIST VERIFIED", flush=True)
+            print("Verified files:", len(expected), flush=True)
+            for name in sorted(expected):
+                print("FOUND:", name, flush=True)
+            print("Dataset URL: https://www.kaggle.com/datasets/" + dataset_id)
+            print("Please confirm Dataset Visibility = Private in Kaggle UI.")
+            return
+        print(
+            f"Remote listing attempt {attempt}/{attempts}: "
+            f"exit={listed.returncode}; missing={missing}",
+            flush=True,
+        )
+        if listed.stdout.strip():
+            print("Kaggle response:", listed.stdout[-1200:], flush=True)
+        if listed.stderr.strip():
+            print("Kaggle error:", listed.stderr[-1200:], flush=True)
+        if attempt < attempts:
+            time.sleep(interval)
+    raise RuntimeError(
+        "Dataset creation/upload was requested but the remote files are not "
+        "fully listed yet. Use --verify-only again; do NOT rerun dataset create."
+    )
+
+
 def main():
     args = parse_args()
+    if not args.dataset_id.startswith("prasadpattuvamveedu/"):
+        raise ValueError("Only an account-owned dataset ID may be used")
+    if args.verify_only:
+        manifest = args.backup_dir / "day4_backup_manifest.json"
+        if not manifest.is_file():
+            raise FileNotFoundError(
+                f"Local backup manifest missing: {manifest}. "
+                "Original upload used this directory."
+            )
+        backup = json.loads(manifest.read_text(encoding="utf-8"))
+        if backup.get("dataset_id") != args.dataset_id:
+            raise ValueError("Dataset ID differs from the backed-up manifest")
+        expected = {item["name"] for item in backup["files"]}
+        expected.add(manifest.name)
+        verify_remote(args.dataset_id, expected, args.verify_attempts, args.verify_interval)
+        return
+
     required = [
         args.checkpoint, args.train, args.train_manifest,
         args.eval_results, args.eval_summary, args.log,
     ]
+    if any(file is None for file in required):
+        raise ValueError(
+            "Provide all six file paths to create a backup, "
+            "or use --verify-only for the existing dataset"
+        )
     for file in required:
         if not file.is_file():
             raise FileNotFoundError(file)
@@ -86,9 +149,6 @@ def main():
         raise ValueError("Input basenames must be unique")
     if len(set(p.resolve() for p in required)) != len(required):
         raise ValueError("Input paths must be unique")
-    if not args.dataset_id.startswith("prasadpattuvamveedu/"):
-        raise ValueError("Only an account-owned dataset ID may be used")
-
     checkpoint = verify_checkpoint(args.checkpoint)
     test_summary = json.loads(args.eval_summary.read_text(encoding="utf-8"))
     if (
@@ -151,30 +211,8 @@ def main():
             + "\n" + create.stderr[-2500:]
         )
 
-    listed = subprocess.run(
-        ["kaggle", "datasets", "files", args.dataset_id, "--page-size", "200"],
-        capture_output=True, text=True,
-    )
-    if listed.returncode:
-        raise RuntimeError("Remote verification failed: " + listed.stderr[-2000:])
-    expected = {p["name"] for p in files} | {
-        "day4_backup_manifest.json",
-    }
-    missing = sorted(name for name in expected if name not in listed.stdout)
-    if missing:
-        raise RuntimeError(
-            "Remote dataset created but files NOT confirmed: " + repr(missing)
-            + "\nDo not close Kaggle until resolved."
-        )
-    print("PRIVATE DATASET BACKUP FILE LIST VERIFIED")
-    print("Verified files:", len(expected))
-    for name in sorted(expected):
-        print("FOUND:", name)
-    print("Dataset URL: https://www.kaggle.com/datasets/" + args.dataset_id)
-    print(
-        "Check the dataset's Visibility in Kaggle UI. "
-        "The upload did not specify --public."
-    )
+    expected = {p["name"] for p in files} | {manifest_path.name}
+    verify_remote(args.dataset_id, expected, args.verify_attempts, args.verify_interval)
 
 
 if __name__ == "__main__":
