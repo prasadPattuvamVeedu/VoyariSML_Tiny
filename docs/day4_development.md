@@ -142,3 +142,31 @@ subprocess.run([
 
 Review printed counts and spot-check generated examples before deciding whether
 to mix the new data with Day 3 replay data for a new, separate SFT experiment.
+
+
+### Day 4 generator fix (2026-10-10)
+
+The first generator run failed with `ValueError: Input/output paths must be distinct`
+because the original V9 dataset was deliberately passed as both
+`--system-dataset` and `--existing-train`. Repeating an input file is valid.
+The generator now forbids only output/manifest collisions with each other or
+with input files. Clarification templates also include location variation so
+the default 240 unique clarification examples can be produced.
+
+Before rerunning the generation command above, pull the latest branch and run:
+
+```python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run(
+    ["git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"],
+    check=True,
+)
+subprocess.run(
+    [sys.executable, "-u", str(repo / "scripts/test_day4_grounded_generation.py")],
+    cwd=repo, check=True,
+)
+```
+
+This is a code/path validation fix; it does not resume training or change model weights.
