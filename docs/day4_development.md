@@ -261,3 +261,41 @@ A passed preflight confirms data and checkpoint compatibility but performs
 **no optimizer updates**. After the first 25 updates, run the same 30-question
 benchmark for the frozen parent and the candidate. Save important checkpoints
 to a persistent private Kaggle Dataset before notebook shutdown.
+
+
+## Step 6 — Back up the new Day 4 step-25 candidate before any more training
+
+The first 25 optimizer updates completed successfully, but the Day 4
+development benchmark found no net improvement: exact total remained 4/30;
+tool exact improved 2/8 → 4/8, but clarification topic match fell 2/10 → 0/10
+and exact state remained 0/12. **Do not blindly resume to step 50.**
+
+Use \`scripts/backup_day4_checkpoint.py\` to create a NEW private Kaggle
+Dataset of the current Day 4 candidate checkpoint, generated training JSONL,
+generator manifest, test results/summary and training log. The script validates
+the step-25 parent lineage, copies files without modification, uses license
+\`other\` (already accepted by Kaggle), and checks the Kaggle remote file listing.
+No \`--public\` flag is used. Verify private visibility in Kaggle UI.
+
+\`\`\`python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run([
+    "git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"
+], check=True)
+checkpoint = repo / "artifacts/checkpoints/sft_day4/grounded_mix_v1/voyari_day4_step_000025.pt"
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/backup_day4_checkpoint.py"),
+    "--checkpoint", str(checkpoint),
+    "--train", "/kaggle/working/day4_data/day4_grounded_train.jsonl",
+    "--train-manifest", "/kaggle/working/day4_data/day4_grounded_manifest.json",
+    "--eval-results", "/kaggle/working/day4_evaluation/day4_sft_day4_step_000025_results.jsonl",
+    "--eval-summary", "/kaggle/working/day4_evaluation/day4_sft_day4_step_000025_summary.json",
+    "--log", str(repo / "logs/sft_day4/grounded_mix_v1.jsonl"),
+], cwd=repo, check=True)
+\`\`\`
+
+After the private backup is verified, inspect the full 30-case action regressions
+and missing/extra state fields; design a controlled follow-up rather than
+continuing the same 100-step run automatically.
