@@ -299,3 +299,34 @@ subprocess.run([
 After the private backup is verified, inspect the full 30-case action regressions
 and missing/extra state fields; design a controlled follow-up rather than
 continuing the same 100-step run automatically.
+
+
+### If Kaggle reports "Your private Dataset is being created" followed by a failed file listing
+
+Kaggle dataset creation may continue server-side after the CLI has uploaded
+all files. The first \`kaggle datasets files\` attempt can fail while the new
+dataset is indexed. **Do not rerun the full backup command**, as that can
+attempt duplicate dataset creation.
+
+The backup script now retries listing, and supports a verification-only mode.
+To verify an existing dataset without reuploading a single file:
+
+\`\`\`python
+import subprocess, sys
+from pathlib import Path
+repo = Path("/kaggle/working/VoyariSML_Tiny_day3")
+subprocess.run([
+    "git", "-C", str(repo), "pull", "--ff-only", "origin", "training/stage1-stability"
+], check=True)
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/test_backup_day4_checkpoint.py")
+], cwd=repo, check=True)
+subprocess.run([
+    sys.executable, "-u", str(repo / "scripts/backup_day4_checkpoint.py"),
+    "--verify-only",
+], cwd=repo, check=True)
+\`\`\`
+
+Verification uses the local backup manifest to check all seven expected
+uploaded artifacts. A completed file listing confirms remote presence; for
+privacy also confirm the Kaggle dataset visibility is set to **Private**.
