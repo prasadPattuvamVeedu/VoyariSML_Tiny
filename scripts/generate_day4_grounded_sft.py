@@ -63,8 +63,8 @@ DURATION_TEXT = (
 GROUP_TEXT = {
     "solo": ("I'll be travelling solo.", "This is a solo trip.",
              "I'll travel alone.", "It's just me travelling."),
-    "couple": ("My partner and I are travelling.", "I'll go with my spouse.",
-               "It's me and my partner."),
+    "couple": ("I am travelling with my partner.", "I'll go with my spouse.",
+               "I will travel with my partner."),
     "family_parents": ("I'll be travelling with my parents.",
                        "I'm going with my parents."),
     "friends": ("I'm travelling with friends.", "I'll be going with my friends."),
