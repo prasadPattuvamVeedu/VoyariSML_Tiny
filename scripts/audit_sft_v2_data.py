@@ -142,8 +142,13 @@ def budget_supported(value, text):
 
 
 def traveller_count_supported(value, text):
-    """Allow unambiguous small groups; don't assume group-size defaults."""
+    """Allow grounded group sizes, including a clear solo=1 indicator."""
     if numeric_mentioned(value, text):
+        return True
+    # The words "solo", "alone", or "by myself" explicitly indicate one person.
+    if value == 1 and re.search(
+        r"\b(?:solo|alone|by myself|on my own|just me)\b", text
+    ):
         return True
     try:
         number = int(value)
@@ -203,6 +208,13 @@ def inspect_action(action, user_context):
             warnings.append("budget_not_explicit_in_user_context")
         if "traveller_count" in state and not traveller_count_supported(state["traveller_count"], user_context):
             warnings.append("traveller_count_not_numeric_in_user_context")
+        # Solo is explicit evidence for one traveller, but a plural reference
+        # elsewhere in the request can indicate contradictory/ambiguous wording.
+        # Flag for review only; do not automatically remove the solo state.
+        if state.get("traveller_group") == "solo" and re.search(
+            r"\b(?:we|us|our)\b", user_context
+        ):
+            warnings.append("solo_with_plural_reference_review")
         for interest in state.get("interests", []):
             if isinstance(interest, str) and not phrase_present(interest, user_context):
                 warnings.append("interest_not_verbatim_in_user_context")
