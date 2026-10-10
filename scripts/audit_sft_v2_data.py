@@ -229,6 +229,17 @@ def iter_records(path):
             yield line_number, json.loads(raw)
 
 
+def first_eval_question(record):
+    """Extract an eval prompt from either conversation or behavior-eval JSONL."""
+    if isinstance(record.get("question"), str):
+        return normalize(record["question"])
+    if isinstance(record.get("messages"), list):
+        for message in record["messages"]:
+            if message.get("role") == "user":
+                return normalize(message.get("content", ""))
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", type=Path, required=True)
@@ -255,10 +266,9 @@ def main():
     eval_questions = set()
     if args.eval:
         for _, record in iter_records(args.eval):
-            users = [normalize(m.get("content", "")) for m in record.get("messages", [])
-                     if m.get("role") == "user"]
-            if users:
-                eval_questions.add(users[0])
+            question = first_eval_question(record)
+            if question:
+                eval_questions.add(question)
     eval_overlap = 0
 
     for line, record in iter_records(args.train):
