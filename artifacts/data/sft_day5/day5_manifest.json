@@ -1,0 +1,17 @@
+{
+  "count": 4000,
+  "mix": {
+    "state": 2100,
+    "tool": 900,
+    "clarify": 600,
+    "multi": 400
+  },
+  "seed": 20261011,
+  "sha256": "307aeeb6785387662ac03134379ec4b0aa0cf11ebb8ca60948bfc4d05d813ef6",
+  "holdout_overlap": 0,
+  "source_files": [
+    "eval\\day4_diagnostic_v1.jsonl",
+    "eval\\day5_dev_v1.jsonl"
+  ],
+  "note": "Synthetic; independent human label review and real blind evaluation are required before deployment."
+}
